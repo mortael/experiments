@@ -419,14 +419,14 @@ class MathGeniusApp {
     getEncouragement() {
         const messages = [
             'Keep up the great work!',
-            'You're getting better and better!',
+            'You\'re getting better and better!',
             'Your brain is getting stronger!',
             'Math genius in the making!',
-            'You're unstoppable!',
+            'You\'re unstoppable!',
             'What a smart cookie!',
-            'You're on a roll!',
+            'You\'re on a roll!',
             'Fantastic effort!',
-            'You're learning so fast!',
+            'You\'re learning so fast!',
             'Keep that streak going!'
         ];
         return messages[Math.floor(Math.random() * messages.length)];
