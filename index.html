@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Genius Kids - Learn Math the Fun Way!</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Welcome Screen -->
+        <div id="welcome-screen" class="screen active">
+            <div class="hero">
+                <h1>🌟 Math Genius Kids 🌟</h1>
+                <p class="subtitle">Learn Math the Fun Way!</p>
+                <div class="age-selector">
+                    <label for="age">How old are you?</label>
+                    <select id="age" name="age">
+                        <option value="">Select your age</option>
+                        <option value="4">4 years old</option>
+                        <option value="5">5 years old</option>
+                        <option value="6">6 years old</option>
+                        <option value="7">7 years old</option>
+                        <option value="8">8 years old</option>
+                        <option value="9">9 years old</option>
+                        <option value="10">10 years old</option>
+                        <option value="11">11 years old</option>
+                        <option value="12">12 years old</option>
+                    </select>
+                </div>
+                <div class="name-input">
+                    <label for="student-name">What's your name?</label>
+                    <input type="text" id="student-name" placeholder="Enter your name">
+                </div>
+                <button id="start-assessment" class="btn btn-primary">Start Learning!</button>
+            </div>
+        </div>
+
+        <!-- Assessment Screen -->
+        <div id="assessment-screen" class="screen">
+            <div class="progress-bar">
+                <div class="progress-fill" id="assessment-progress"></div>
+            </div>
+            <div class="question-container">
+                <h2>Let's see what you know! 🎯</h2>
+                <p class="question-number">Question <span id="question-num">1</span> of 5</p>
+                <div class="question" id="assessment-question"></div>
+                <div class="answer-options" id="assessment-answers"></div>
+                <div class="feedback" id="assessment-feedback"></div>
+                <button id="next-assessment" class="btn btn-secondary" style="display: none;">Next Question</button>
+            </div>
+        </div>
+
+        <!-- Practice Screen -->
+        <div id="practice-screen" class="screen">
+            <div class="header-bar">
+                <div class="student-info">
+                    <span class="student-name-display">👋 Hi, <span id="display-name"></span>!</span>
+                    <span class="level-badge">Level: <span id="current-level">1</span></span>
+                </div>
+                <div class="stats">
+                    <span class="streak">🔥 Streak: <span id="streak-count">0</span></span>
+                    <span class="score">⭐ Score: <span id="score-count">0</span></span>
+                </div>
+            </div>
+            <div class="practice-container">
+                <div class="question" id="practice-question"></div>
+                <div class="answer-input-container">
+                    <input type="number" id="practice-answer" placeholder="Your answer">
+                    <button id="submit-answer" class="btn btn-primary">Check Answer</button>
+                </div>
+                <div class="feedback" id="practice-feedback"></div>
+                <button id="next-question" class="btn btn-secondary" style="display: none;">Next Problem</button>
+            </div>
+            <div class="encouragement" id="encouragement"></div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="results-screen" class="screen">
+            <div class="results-container">
+                <h2>🎉 Awesome Job! 🎉</h2>
+                <div class="results-summary">
+                    <div class="result-stat">
+                        <span class="stat-label">Total Problems Solved:</span>
+                        <span class="stat-value" id="total-problems">0</span>
+                    </div>
+                    <div class="result-stat">
+                        <span class="stat-label">Correct Answers:</span>
+                        <span class="stat-value" id="correct-answers">0</span>
+                    </div>
+                    <div class="result-stat">
+                        <span class="stat-label">Accuracy:</span>
+                        <span class="stat-value" id="accuracy">0%</span>
+                    </div>
+                    <div class="result-stat">
+                        <span class="stat-label">Best Streak:</span>
+                        <span class="stat-value" id="best-streak">0</span>
+                    </div>
+                </div>
+                <div class="level-progress">
+                    <p>You reached <strong>Level <span id="final-level">1</span></strong>!</p>
+                    <p class="recommendation" id="recommendation"></p>
+                </div>
+                <button id="continue-practice" class="btn btn-primary">Continue Practicing</button>
+                <button id="restart-app" class="btn btn-secondary">Start Over</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

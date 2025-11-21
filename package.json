@@ -1,0 +1,22 @@
+{
+  "name": "math-genius-kids",
+  "version": "1.0.0",
+  "description": "AI-powered educational math app for elementary school students",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 8080 -o",
+    "test": "echo \"No tests specified yet\" && exit 0"
+  },
+  "keywords": [
+    "education",
+    "mathematics",
+    "AI",
+    "elementary-school",
+    "adaptive-learning"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
