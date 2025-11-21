@@ -66,16 +66,24 @@ class MathGeniusApp {
     startAssessment() {
         const age = parseInt(document.getElementById('age').value);
         const name = document.getElementById('student-name').value.trim();
+        const ageSelect = document.getElementById('age');
+        const nameInput = document.getElementById('student-name');
         
         if (!age) {
-            alert('Please select your age!');
+            ageSelect.style.borderColor = '#f44336';
+            ageSelect.focus();
             return;
         }
         
         if (!name) {
-            alert('Please enter your name!');
+            nameInput.style.borderColor = '#f44336';
+            nameInput.focus();
             return;
         }
+        
+        // Reset border colors
+        ageSelect.style.borderColor = '';
+        nameInput.style.borderColor = '';
         
         this.student.age = age;
         this.student.name = name;
@@ -344,12 +352,16 @@ class MathGeniusApp {
     }
     
     checkPracticeAnswer() {
-        const userAnswer = parseInt(document.getElementById('practice-answer').value);
+        const answerInput = document.getElementById('practice-answer');
+        const userAnswer = parseInt(answerInput.value);
         
         if (isNaN(userAnswer)) {
-            alert('Please enter a number!');
+            answerInput.style.borderColor = '#f44336';
+            answerInput.focus();
             return;
         }
+        
+        answerInput.style.borderColor = '';
         
         const isCorrect = userAnswer === this.currentQuestion.answer;
         const feedback = document.getElementById('practice-feedback');
