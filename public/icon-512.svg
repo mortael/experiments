@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Pattern Generator</title>
+  <desc id="desc">Minimal purple grid logo for the pattern generator</desc>
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c4dff" />
+      <stop offset="100%" stop-color="#00d4ff" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="64" fill="#0b1021" />
+  <rect x="80" y="80" width="352" height="352" rx="40" fill="url(#g)" opacity="0.15" />
+  <g stroke="url(#g)" stroke-width="16" stroke-linecap="round">
+    <line x1="128" y1="184" x2="384" y2="184" />
+    <line x1="128" y1="256" x2="384" y2="256" />
+    <line x1="128" y1="328" x2="384" y2="328" />
+    <line x1="184" y1="152" x2="184" y2="360" />
+    <line x1="280" y1="152" x2="280" y2="360" />
+    <line x1="344" y1="152" x2="344" y2="360" />
+  </g>
+  <circle cx="156" cy="184" r="20" fill="#fff" />
+  <circle cx="156" cy="256" r="20" fill="#fff" />
+  <circle cx="156" cy="328" r="20" fill="#fff" />
+</svg>
