@@ -1,18 +1,18 @@
-# Offline Pattern Generator
+# XSD Editor
 
-This project is a React + TypeScript single-page interface for generating deterministic genre-based patterns with offline-first support.
+A web-based XSD (XML Schema Definition) editor with a tree view interface, similar to XMLSpy.
 
 ## Features
-- Genre-aware pattern generator with seeded PRNG for repeatable results.
-- Controls for genre, BPM, bars (1–16), time signature, swing, complexity, key/scale with lock, seed lock/randomize, and per-track toggles/presets.
-- Humanize ranges for timing and velocity.
-- Tracks for Drums, Bass, Chords/Pad, Lead, Arp, and FX hits, plus motif-based lead and chord progressions.
-- Grid/piano-roll previews and WebAudio playback (drum sampler + subtractive synth) with loop, metronome, start/stop, and master volume.
-- Export combined or per-track MIDI via `@tonejs/midi`, plus JSON recipe import/export.
-- Responsive styling with lightweight assets, manifest, and service worker for offline use.
+- **Tree View Structure**: Visual hierarchy of XSD elements
+- **Quick Enable/Disable**: Toggle elements and sections on/off
+- **Cardinality Editing**: Easy modification of minOccurs and maxOccurs
+- **Format/Type Editing**: Set data types and formats for elements
+- **Import Support**: Import external XSD files via xs:import and xs:include
+- **File Management**: Load, edit, and save XSD files
+- **Visual Indicators**: Icons showing element types, cardinality, and status
 
-## Getting started
-1. Install dependencies (requires npm registry access):
+## Getting Started
+1. Install dependencies:
    ```bash
    npm install
    ```
@@ -26,10 +26,21 @@ This project is a React + TypeScript single-page interface for generating determ
    npm run preview
    ```
 
-If you are behind a proxy, configure npm appropriately so packages such as `react`, `@vitejs/plugin-react`, and `@tonejs/midi` can be installed.
-
 ## Usage
-- Adjust generator controls in the left column, toggle tracks, and pick presets per genre.
-- Click **Generate MIDI** to refresh the deterministic pattern and use **Play/Stop** to audition it.
-- Export MIDI (combined or per track) from the Export & Presets panel; copy or import recipe JSON to recreate patterns.
-- Enable offline installation via the browser prompt; the service worker caches the shell so the UI remains available offline.
+1. **Load XSD File**: Click "Load XSD File" to upload an existing XSD file, or start with the default schema
+2. **Navigate Tree**: Expand/collapse elements in the tree view
+3. **Edit Elements**:
+   - Click on any element to select and edit it
+   - Toggle enabled/disabled using the checkbox
+   - Modify cardinality (min/max occurs)
+   - Change element type and format
+4. **Manage Sections**: Enable/disable entire sections using section checkboxes
+5. **Import Schemas**: Add xs:import or xs:include statements to reference external schemas
+6. **Export**: Download the modified XSD file
+
+## Note on Branch Organization
+This repository contains multiple experimental projects, each in a separate branch:
+- `main`: Current active project (XSD Editor)
+- `midi-generator`: MIDI Pattern Generator project
+
+To switch between projects, use: `git checkout <branch-name>`
