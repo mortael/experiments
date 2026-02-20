@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crochet 3D Visualizer</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #1a1a2e;
+            --surface: #16213e;
+            --surface2: #0f3460;
+            --accent: #e94560;
+            --accent2: #ff6b6b;
+            --text: #eee;
+            --text-dim: #aab;
+            --border: #2a3a5e;
+            --yarn-default: #e94560;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .app {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+
+        header {
+            grid-column: 1 / -1;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        header h1 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header .tagline {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        .sidebar {
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-section h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+
+        .pattern-input {
+            width: 100%;
+            min-height: 180px;
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+        .pattern-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .btn {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: #fff;
+            flex: 1;
+        }
+
+        .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover { background: var(--border); }
+
+        .examples-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .example-btn {
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.15s;
+        }
+
+        .example-btn:hover {
+            border-color: var(--accent);
+            background: var(--surface2);
+        }
+
+        .example-btn .example-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .example-btn .example-desc {
+            color: var(--text-dim);
+            font-size: 0.75rem;
+        }
+
+        .options-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .option-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .option-group label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+        }
+
+        .option-group input[type="color"] {
+            width: 36px;
+            height: 28px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg);
+            cursor: pointer;
+        }
+
+        .option-group select, .option-group input[type="range"] {
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+        }
+
+        .stitch-legend {
+            overflow-y: auto;
+            flex: 1;
+            padding: 16px;
+        }
+
+        .stitch-legend h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            background: var(--bg);
+            border-radius: 4px;
+        }
+
+        .legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .legend-abbr {
+            font-weight: 700;
+            font-family: monospace;
+            min-width: 30px;
+        }
+
+        .viewport {
+            position: relative;
+            overflow: hidden;
+        }
+
+        #canvas3d {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .viewport-overlay {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .info-badge {
+            background: rgba(22, 33, 62, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.78rem;
+        }
+
+        .info-badge .label { color: var(--text-dim); }
+        .info-badge .value { color: var(--accent2); font-weight: 600; }
+
+        .viewport-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .view-btn {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(22, 33, 62, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+        }
+
+        .view-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .error-toast {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(233, 69, 96, 0.9);
+            backdrop-filter: blur(8px);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+
+        .error-toast.visible { opacity: 1; pointer-events: auto; }
+
+        .row-highlight-info {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(22, 33, 62, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 0.82rem;
+            z-index: 5;
+        }
+
+        .row-highlight-info .row-label { color: var(--accent2); font-weight: 700; }
+
+        @media (max-width: 800px) {
+            .app {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto 1fr;
+            }
+            .sidebar {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                max-height: 45vh;
+                overflow-y: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header>
+        <h1>Crochet 3D Visualizer</h1>
+        <span class="tagline">See your pattern before you stitch it</span>
+    </header>
+
+    <div class="sidebar">
+        <div class="sidebar-section">
+            <h3>Pattern</h3>
+            <textarea class="pattern-input" id="patternInput" spellcheck="false" placeholder="Enter your crochet pattern...&#10;&#10;Example:&#10;Round 1: Magic ring, 6 sc&#10;Round 2: inc around (12)&#10;Round 3: (sc, inc) around (18)"></textarea>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="renderBtn">Render 3D</button>
+                <button class="btn btn-secondary" id="clearBtn">Clear</button>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Examples</h3>
+            <div class="examples-list" id="examplesList"></div>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Display Options</h3>
+            <div class="options-row">
+                <div class="option-group">
+                    <label>Yarn Color</label>
+                    <input type="color" id="yarnColor" value="#e94560">
+                </div>
+                <div class="option-group">
+                    <label>Style</label>
+                    <select id="renderStyle">
+                        <option value="yarn">Yarn Tubes</option>
+                        <option value="solid">Solid Surface</option>
+                        <option value="wireframe">Wireframe</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label>Stitch Size</label>
+                    <input type="range" id="stitchSize" min="0.5" max="2" step="0.1" value="1">
+                </div>
+            </div>
+        </div>
+
+        <div class="stitch-legend">
+            <h3>Stitch Reference</h3>
+            <div class="legend-grid">
+                <div class="legend-item"><div class="legend-swatch" style="background:#e94560"></div><span class="legend-abbr">ch</span> Chain</div>
+                <div class="legend-item"><div class="legend-swatch" style="background:#ff6b6b"></div><span class="legend-abbr">sc</span> Single Crochet</div>
+                <div class="legend-item"><div class="legend-swatch" style="background:#ffa502"></div><span class="legend-abbr">hdc</span> Half Double</div>
+                <div class="legend-item"><div class="legend-swatch" style="background:#2ed573"></div><span class="legend-abbr">dc</span> Double Crochet</div>
+                <div class="legend-item"><div class="legend-swatch" style="background:#1e90ff"></div><span class="legend-abbr">tr</span> Treble</div>
+                <div class="legend-item"><div class="legend-swatch" style="background:#ff4757"></div><span class="legend-abbr">sl st</span> Slip Stitch</div>
+                <div class="legend-item"><div class="legend-swatch" style="background:#ffd43b"></div><span class="legend-abbr">inc</span> Increase</div>
+                <div class="legend-item"><div class="legend-swatch" style="background:#a55eea"></div><span class="legend-abbr">dec</span> Decrease</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="viewport">
+        <canvas id="canvas3d"></canvas>
+        <div class="error-toast" id="errorToast"></div>
+        <div class="row-highlight-info" id="rowInfo" style="display:none">
+            <span class="row-label" id="rowLabel"></span>
+            <span id="rowDetail"></span>
+        </div>
+        <div class="viewport-controls">
+            <button class="view-btn" id="viewTop" title="Top view">T</button>
+            <button class="view-btn" id="viewFront" title="Front view">F</button>
+            <button class="view-btn" id="viewSide" title="Side view">S</button>
+            <button class="view-btn" id="viewReset" title="Reset view">R</button>
+        </div>
+        <div class="viewport-overlay">
+            <div class="info-badge">
+                <span class="label">Stitches: </span><span class="value" id="stitchCount">0</span>
+                &nbsp;|&nbsp;
+                <span class="label">Rows: </span><span class="value" id="rowCount">0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
