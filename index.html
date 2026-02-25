@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Sonovix — Next-generation audio intelligence platform. Shape the sound of tomorrow." />
+  <meta property="og:title" content="Sonovix — Shape the Sound of Tomorrow" />
+  <meta property="og:description" content="Next-generation audio intelligence for creators, engineers, and enterprises." />
+  <meta property="og:type" content="website" />
+  <title>Sonovix — Shape the Sound of Tomorrow</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Aurora Background — decorative blobs + particle canvas
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div class="aurora" aria-hidden="true">
+    <div class="aurora__blob aurora__blob--1"></div>
+    <div class="aurora__blob aurora__blob--2"></div>
+    <div class="aurora__blob aurora__blob--3"></div>
+  </div>
+  <canvas id="particle-canvas" aria-hidden="true"></canvas>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Navigation
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <nav class="nav" role="navigation" aria-label="Main navigation">
+    <a class="nav__logo" href="#hero" aria-label="Sonovix home">
+      <div class="nav__logo-mark" aria-hidden="true">S</div>
+      Sonovix
+    </a>
+
+    <ul class="nav__links" role="list">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+
+    <div class="nav__cta">
+      <a href="#contact" class="btn btn--ghost">Log in</a>
+      <a href="#waitlist" class="btn btn--primary">Get Early Access</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Hero
+    ════════════════════════════════════════════════════════════════════════ -->
+    <section class="hero" id="hero" aria-labelledby="hero-title">
+      <div class="hero__badge" role="note">
+        <span class="hero__badge-dot" aria-hidden="true"></span>
+        Now in open beta
+      </div>
+
+      <h1 class="hero__title" id="hero-title">
+        Shape the<br />
+        <span class="gradient-text">Sound of Tomorrow</span>
+      </h1>
+
+      <p class="hero__subtitle">
+        Sonovix delivers next-generation audio intelligence — real-time AI processing,
+        sub-millisecond latency, and global edge delivery in one seamless platform.
+      </p>
+
+      <div class="hero__actions">
+        <a href="#waitlist" class="btn btn--primary btn--lg">
+          Start for Free
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <a href="#features" class="btn btn--ghost btn--lg">See How It Works</a>
+      </div>
+
+      <!-- Scroll indicator -->
+      <div class="hero__scroll-indicator" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M10 4v12M6 12l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Scroll
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Stats
+    ════════════════════════════════════════════════════════════════════════ -->
+    <section class="stats" aria-label="Key statistics">
+      <div class="stats__grid">
+        <div class="stats__item">
+          <div class="stats__value">10M+</div>
+          <div class="stats__label">Active Users</div>
+        </div>
+        <div class="stats__item">
+          <div class="stats__value">0.3ms</div>
+          <div class="stats__label">Avg. Latency</div>
+        </div>
+        <div class="stats__item">
+          <div class="stats__value">99.99%</div>
+          <div class="stats__label">Uptime SLA</div>
+        </div>
+        <div class="stats__item">
+          <div class="stats__value">500+</div>
+          <div class="stats__label">Integrations</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Features
+    ════════════════════════════════════════════════════════════════════════ -->
+    <section class="features" id="features" aria-labelledby="features-title">
+      <div class="section__header">
+        <p class="section__label">Platform Features</p>
+        <h2 class="section__title" id="features-title">
+          Everything you need to build with sound
+        </h2>
+        <p class="section__desc">
+          From raw audio capture to intelligent distribution, Sonovix provides
+          every layer of the modern audio stack.
+        </p>
+      </div>
+
+      <div class="features__grid">
+
+        <article class="card">
+          <div class="card__icon" aria-hidden="true">🎛️</div>
+          <h3 class="card__title">AI Audio Engine</h3>
+          <p class="card__desc">
+            Real-time neural processing transforms raw audio into crystal-clear,
+            spatially-aware sound with adaptive noise suppression.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card__icon" aria-hidden="true">⚡</div>
+          <h3 class="card__title">Ultra-Low Latency</h3>
+          <p class="card__desc">
+            Sub-millisecond pipeline built on Rust and WebAssembly delivers
+            live performance without compromise.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card__icon" aria-hidden="true">🌐</div>
+          <h3 class="card__title">Edge Deployment</h3>
+          <p class="card__desc">
+            One-click distribution to 200+ global edge nodes — your users hear
+            perfection, everywhere, every time.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card__icon" aria-hidden="true">🔒</div>
+          <h3 class="card__title">Enterprise Security</h3>
+          <p class="card__desc">
+            End-to-end encryption, SOC 2 Type II compliance, and zero-trust
+            architecture by default.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card__icon" aria-hidden="true">🧩</div>
+          <h3 class="card__title">Plugin Ecosystem</h3>
+          <p class="card__desc">
+            500+ community plugins. Build your own with our open SDK and
+            ship to production in minutes.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card__icon" aria-hidden="true">📊</div>
+          <h3 class="card__title">Analytics Dashboard</h3>
+          <p class="card__desc">
+            Deep insights into listener behaviour, quality metrics, and
+            infrastructure health in real time.
+          </p>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         About — Bento Grid
+    ════════════════════════════════════════════════════════════════════════ -->
+    <section class="about" id="about" aria-labelledby="about-title">
+      <div class="section__header">
+        <p class="section__label">About Sonovix</p>
+        <h2 class="section__title" id="about-title">Built for the next era of audio</h2>
+        <p class="section__desc">
+          We started Sonovix because the tools for building with sound hadn't kept
+          up with what modern engineers and creators actually need.
+        </p>
+      </div>
+
+      <div class="bento">
+
+        <div class="bento__item bento__item--main">
+          <p class="bento__label">Our mission</p>
+          <h3 class="bento__heading">
+            Democratise studio-grade audio for every developer
+          </h3>
+          <p class="bento__text">
+            Sonovix was founded by audio engineers and infrastructure veterans who
+            believed that high-fidelity, intelligent sound should be a first-class
+            primitive — not an afterthought. We've built the platform we always
+            wished existed.
+          </p>
+          <!-- Animated waveform decoration -->
+          <div class="waveform" aria-hidden="true"></div>
+        </div>
+
+        <div class="bento__item bento__item--side">
+          <p class="bento__label">Backed by the best</p>
+          <h3 class="bento__heading">$42M Series A</h3>
+          <p class="bento__text">
+            Raised from Andreessen Horowitz, Sequoia Capital, and a cohort of
+            angel investors who've built the world's leading audio companies.
+          </p>
+        </div>
+
+        <div class="bento__item bento__item--third">
+          <p class="bento__label">Open core</p>
+          <h3 class="bento__heading">MIT Licensed SDK</h3>
+          <p class="bento__text">
+            Our SDK is open source. Inspect it, extend it, or contribute back.
+          </p>
+        </div>
+
+        <div class="bento__item bento__item--third">
+          <p class="bento__label">Infrastructure</p>
+          <h3 class="bento__heading">200+ PoPs Globally</h3>
+          <p class="bento__text">
+            Points of presence spanning 6 continents ensure the lowest possible
+            round-trip for every listener.
+          </p>
+        </div>
+
+        <div class="bento__item bento__item--third">
+          <p class="bento__label">Team</p>
+          <h3 class="bento__heading">80+ Engineers</h3>
+          <p class="bento__text">
+            Ex-Spotify, Apple, Google, and Dolby alumni obsessed with
+            the craft of audio.
+          </p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         CTA / Waitlist
+    ════════════════════════════════════════════════════════════════════════ -->
+    <section class="cta" id="waitlist" aria-labelledby="cta-title">
+      <div class="cta__inner">
+        <h2 class="cta__title" id="cta-title">
+          Ready to build with sound?
+        </h2>
+        <p class="cta__desc">
+          Join 10,000+ developers already on the waitlist. Get early access,
+          exclusive docs, and a free tier that scales with you.
+        </p>
+        <form class="cta__form" id="hero-waitlist-form" novalidate aria-label="Early access sign-up">
+          <input
+            class="cta__input"
+            type="email"
+            name="email"
+            placeholder="you@company.com"
+            required
+            autocomplete="email"
+            aria-label="Email address"
+          />
+          <button type="submit" class="btn btn--primary btn--lg">
+            Get Early Access
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Contact
+    ════════════════════════════════════════════════════════════════════════ -->
+    <section class="contact" id="contact" aria-labelledby="contact-title">
+      <div class="section__header">
+        <p class="section__label">Get in Touch</p>
+        <h2 class="section__title" id="contact-title">Let's talk</h2>
+        <p class="section__desc">Have questions about pricing, integrations, or custom enterprise plans? We'd love to hear from you.</p>
+      </div>
+
+      <div class="contact__grid container">
+        <!-- Info column -->
+        <div class="contact__info">
+          <div style="display:flex;flex-direction:column;gap:2rem;">
+            <div>
+              <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:0.4rem;">📍 HQ</h3>
+              <p style="color:var(--text-muted);font-size:0.9rem;">1 Infinite Loop, San Francisco, CA 94025</p>
+            </div>
+            <div>
+              <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:0.4rem;">📧 Email</h3>
+              <a href="mailto:hello@sonovix.io" style="color:var(--brand-accent);font-size:0.9rem;text-decoration:none;">hello@sonovix.io</a>
+            </div>
+            <div>
+              <h3 style="font-size:1.05rem;font-weight:700;margin-bottom:0.4rem;">🕐 Support Hours</h3>
+              <p style="color:var(--text-muted);font-size:0.9rem;">Mon – Fri, 9 am – 6 pm PT<br/>24/7 for Enterprise plans</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form column -->
+        <form class="contact__form" id="contact-form" novalidate aria-label="Contact form">
+          <div class="form__group">
+            <label class="form__label" for="contact-name">Name</label>
+            <input
+              class="form__input"
+              type="text"
+              id="contact-name"
+              name="name"
+              placeholder="Ada Lovelace"
+              required
+              autocomplete="name"
+            />
+          </div>
+          <div class="form__group">
+            <label class="form__label" for="contact-email">Email</label>
+            <input
+              class="form__input"
+              type="email"
+              id="contact-email"
+              name="email"
+              placeholder="ada@example.com"
+              required
+              autocomplete="email"
+            />
+          </div>
+          <div class="form__group">
+            <label class="form__label" for="contact-message">Message</label>
+            <textarea
+              class="form__textarea"
+              id="contact-message"
+              name="message"
+              rows="5"
+              placeholder="Tell us about your project…"
+              required
+            ></textarea>
+          </div>
+          <div id="form-status" class="form__status" role="alert" aria-live="polite"></div>
+          <button type="submit" class="btn btn--primary">Send Message</button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       Footer
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer__inner">
+      <div class="footer__top">
+
+        <div class="footer__brand">
+          <a class="nav__logo" href="#hero" aria-label="Sonovix home">
+            <div class="nav__logo-mark" aria-hidden="true">S</div>
+            Sonovix
+          </a>
+          <p>Next-generation audio intelligence for creators, engineers, and enterprises.</p>
+        </div>
+
+        <nav class="footer__links" aria-label="Footer navigation">
+          <div class="footer__col">
+            <p class="footer__col-title">Product</p>
+            <ul role="list">
+              <li><a href="#features">Features</a></li>
+              <li><a href="#waitlist">Pricing</a></li>
+              <li><a href="#waitlist">Changelog</a></li>
+              <li><a href="#waitlist">Roadmap</a></li>
+            </ul>
+          </div>
+
+          <div class="footer__col">
+            <p class="footer__col-title">Developers</p>
+            <ul role="list">
+              <li><a href="#waitlist">Docs</a></li>
+              <li><a href="#waitlist">API Reference</a></li>
+              <li><a href="#waitlist">SDK</a></li>
+              <li><a href="#waitlist">Status</a></li>
+            </ul>
+          </div>
+
+          <div class="footer__col">
+            <p class="footer__col-title">Company</p>
+            <ul role="list">
+              <li><a href="#about">About</a></li>
+              <li><a href="#contact">Contact</a></li>
+              <li><a href="#waitlist">Blog</a></li>
+              <li><a href="#waitlist">Careers</a></li>
+            </ul>
+          </div>
+        </nav>
+
+      </div>
+
+      <div class="footer__bottom">
+        <p class="footer__copy">© <span id="year"></span> Sonovix, Inc. All rights reserved.</p>
+        <div class="social-links" aria-label="Social media links">
+          <a href="https://twitter.com/sonovix" target="_blank" rel="noopener noreferrer" aria-label="Sonovix on Twitter/X">𝕏</a>
+          <a href="https://github.com/sonovix"  target="_blank" rel="noopener noreferrer" aria-label="Sonovix on GitHub">⌥</a>
+          <a href="https://linkedin.com/company/sonovix" target="_blank" rel="noopener noreferrer" aria-label="Sonovix on LinkedIn">in</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Dynamic year -->
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+  <!-- Main app -->
+  <script src="app.js"></script>
+</body>
+</html>
