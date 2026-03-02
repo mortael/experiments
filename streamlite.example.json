@@ -1,0 +1,61 @@
+{
+  "rtmp_url": "rtmp://localhost/live/stream_key",
+  "webcam": "/dev/video0",
+  "audio_device": "default",
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "scenes": [
+    {
+      "name": "clean",
+      "animation": "none",
+      "overlays": [
+        {
+          "type": "now_playing",
+          "x": 24,
+          "y": 24,
+          "width": 480,
+          "height": 72,
+          "text_file": "./state/now_playing.txt",
+          "font_size": 30
+        }
+      ]
+    },
+    {
+      "name": "pulse",
+      "animation": "pulse_frame",
+      "overlays": [
+        {
+          "type": "now_playing",
+          "x": 24,
+          "y": 24,
+          "width": 480,
+          "height": 72,
+          "text_file": "./state/now_playing.txt",
+          "font_size": 30
+        },
+        {
+          "type": "gif",
+          "x": 1020,
+          "y": 520,
+          "gif_path": "./assets/hype.gif"
+        }
+      ]
+    },
+    {
+      "name": "lower-third",
+      "animation": "slide_lower_third",
+      "overlays": [
+        {
+          "type": "now_playing",
+          "x": 40,
+          "y": 600,
+          "width": 780,
+          "height": 80,
+          "text_file": "./state/now_playing.txt",
+          "font_size": 36
+        }
+      ]
+    }
+  ]
+}
