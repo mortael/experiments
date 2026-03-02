@@ -17,6 +17,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
+try:
+    import psutil as _psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    _psutil = None        # type: ignore
+    _HAS_PSUTIL = False
 from PySide6.QtCore import (
     QAbstractListModel,
     QMimeData,
@@ -148,6 +155,16 @@ QPushButton#snapBtn {
     padding: 8px 22px;
 }
 QPushButton#snapBtn:hover { background: #2563eb; color: #fff; }
+
+QLabel#cpuLabel {
+    color: #a6e3a1;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: "Courier New", monospace;
+    padding: 0 8px;
+    border: 1px solid #313244;
+    border-radius: 4px;
+}
 
 QPushButton#iconBtn {
     background: transparent;
@@ -508,39 +525,66 @@ class FFmpegStreamer:
     Frames are dropped (not queued) when FFmpeg can't keep up, to avoid lag.
     """
 
-    BITRATES = ["1000k", "2000k", "3000k", "4500k", "6000k", "8000k"]
+    BITRATES  = ["500k", "1000k", "2000k", "3000k", "4500k", "6000k", "8000k"]
+    PRESETS   = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"]
+    # (display label, ffmpeg -c:v value)
+    ENCODERS  = [
+        ("libx264 (CPU)",      "libx264"),
+        ("h264_nvenc (NVIDIA)","h264_nvenc"),
+        ("h264_qsv (Intel)",   "h264_qsv"),
+        ("h264_amf (AMD)",     "h264_amf"),
+        ("h264_videotoolbox",  "h264_videotoolbox"),
+    ]
 
     def __init__(self, url: str, width: int, height: int,
-                 fps: int, bitrate: str = "3000k", audio_device: str = ""):
-        self._url = url
-        self._width = width
-        self._height = height
-        self._fps = fps
-        self._bitrate = bitrate
+                 fps: int, bitrate: str = "3000k",
+                 preset: str = "veryfast", encoder: str = "libx264",
+                 stream_fps: int = 0):
+        self._url      = url
+        self._width    = width
+        self._height   = height
+        self._fps      = fps
+        self._bitrate  = bitrate
+        self._preset   = preset
+        self._encoder  = encoder
+        # stream_fps=0 means match camera FPS; otherwise cap push rate client-side
+        self._stream_fps = stream_fps if stream_fps > 0 else fps
+        self._interval   = 1.0 / self._stream_fps
+        self._last_push  = 0.0
         self._q: queue.Queue = queue.Queue(maxsize=4)
         self._running = False
         self._proc: subprocess.Popen | None = None
         self._thread: threading.Thread | None = None
         self.error: str = ""
+        self.pid: int = 0
 
     def start(self) -> bool:
         if not shutil.which("ffmpeg"):
             self.error = "ffmpeg not found in PATH"
             return False
+
+        enc = self._encoder
+        gop = self._stream_fps * 2
+
+        # hardware encoders don't use -preset the same way
+        hw = enc != "libx264"
+        preset_args = [] if hw else ["-preset", self._preset, "-tune", "zerolatency"]
+
         cmd = [
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
             # Raw BGR video on stdin
             "-f", "rawvideo", "-vcodec", "rawvideo",
             "-pix_fmt", "bgr24",
             "-s", f"{self._width}x{self._height}",
-            "-r", str(self._fps),
+            "-r", str(self._stream_fps),
             "-i", "pipe:0",
             # Silent audio track
             "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
             # Video encode
-            "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
+            "-c:v", enc,
+            *preset_args,
             "-pix_fmt", "yuv420p",
-            "-g", str(self._fps * 2),
+            "-g", str(gop),
             "-b:v", self._bitrate, "-maxrate", self._bitrate,
             "-bufsize", str(int(self._bitrate[:-1]) * 2) + "k",
             # Audio encode
@@ -556,6 +600,7 @@ class FFmpegStreamer:
             self.error = str(exc)
             return False
 
+        self.pid = self._proc.pid
         self._running = True
         self._thread = threading.Thread(target=self._writer, daemon=True)
         self._thread.start()
@@ -581,6 +626,10 @@ class FFmpegStreamer:
     def push(self, frame: np.ndarray):
         if not self._running:
             return
+        now = time.monotonic()
+        if now - self._last_push < self._interval:
+            return   # throttle to _stream_fps
+        self._last_push = now
         try:
             self._q.put_nowait(frame)
         except queue.Full:
@@ -652,6 +701,11 @@ class PreviewWidget(QWidget):
         self._streamer: FFmpegStreamer | None = None
         self._streaming = False
 
+        # performance
+        self.eco_mode    = False   # skip every other display update
+        self._eco_tick   = 0
+        self.stream_fps  = 0       # 0 = same as camera; else throttled
+
     # ── frame update ──────────────────────────────────────────────────────────
 
     def update_frame(self, frame: np.ndarray):
@@ -705,6 +759,10 @@ class PreviewWidget(QWidget):
             if composed is not None:
                 self._streamer.push(composed)
 
+        # eco mode: repaint only every other frame to save GPU/CPU
+        self._eco_tick += 1
+        if self.eco_mode and self._eco_tick % 2 == 0:
+            return
         self.update()
 
     # ── coordinate helpers ────────────────────────────────────────────────────
@@ -1020,11 +1078,14 @@ class PreviewWidget(QWidget):
 
     # ── streaming ─────────────────────────────────────────────────────────────
 
-    def start_streaming(self, url: str, fps: int, bitrate: str) -> bool:
+    def start_streaming(self, url: str, fps: int, bitrate: str,
+                        preset: str = "veryfast", encoder: str = "libx264",
+                        stream_fps: int = 0) -> bool:
         if self.frame is None:
             return False
         fh, fw = self.frame.shape[:2]
-        self._streamer = FFmpegStreamer(url, fw, fh, fps, bitrate)
+        self._streamer = FFmpegStreamer(
+            url, fw, fh, fps, bitrate, preset, encoder, stream_fps)
         ok = self._streamer.start()
         if ok:
             self._streaming = True
@@ -1313,6 +1374,14 @@ class MainWindow(QMainWindow):
         self._clock_timer.timeout.connect(self.preview.update)
         self._clock_timer.start(100)
 
+        # CPU usage monitor (2 s interval)
+        if _HAS_PSUTIL:
+            self._self_proc = _psutil.Process()
+            self._self_proc.cpu_percent()   # first call returns 0; prime it
+        self._cpu_timer = QTimer()
+        self._cpu_timer.timeout.connect(self._update_cpu)
+        self._cpu_timer.start(2000)
+
     # ── camera detection ──────────────────────────────────────────────────────
 
     def _detect_cameras(self):
@@ -1364,6 +1433,15 @@ class MainWindow(QMainWindow):
 
         sp = QWidget(); sp.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         tb.addWidget(sp)
+
+        self._cpu_label = QLabel("CPU –")
+        self._cpu_label.setObjectName("cpuLabel")
+        self._cpu_label.setToolTip(
+            "Combined CPU usage of this process + FFmpeg streamer.\n"
+            "Requires: pip install psutil" if not _HAS_PSUTIL else
+            "Combined CPU usage of this process + FFmpeg streamer.")
+        tb.addWidget(self._cpu_label)
+        tb.addWidget(QLabel("  "))
 
         self._status = QLabel("Ready")
         self._status.setObjectName("status")
@@ -1468,6 +1546,11 @@ class MainWindow(QMainWindow):
         grid_cb.toggled.connect(lambda v: setattr(self.preview, "show_grid", v))
         safe_cb = QCheckBox("Safe Area")
         safe_cb.toggled.connect(lambda v: setattr(self.preview, "show_safe", v))
+        eco_cb = QCheckBox("Eco")
+        eco_cb.setToolTip(
+            "Eco mode: repaint preview every other frame (~half GPU load).\n"
+            "Streaming and recording are unaffected.")
+        eco_cb.toggled.connect(lambda v: setattr(self.preview, "eco_mode", v))
 
         self._snap_btn = QPushButton("📷  Screenshot")
         self._snap_btn.setObjectName("snapBtn")
@@ -1479,6 +1562,7 @@ class MainWindow(QMainWindow):
         self._rec_btn.toggled.connect(self._toggle_recording)
 
         bl.addWidget(fps_cb); bl.addWidget(grid_cb); bl.addWidget(safe_cb)
+        bl.addSpacing(8); bl.addWidget(eco_cb)
         bl.addStretch()
         bl.addWidget(self._snap_btn); bl.addWidget(self._rec_btn)
 
@@ -1490,30 +1574,58 @@ class MainWindow(QMainWindow):
         row2 = QWidget(); row2.setObjectName("bottombar")
         sl = QHBoxLayout(row2); sl.setContentsMargins(20, 6, 20, 8); sl.setSpacing(10)
 
-        rtmp_lbl = QLabel("RTMP URL")
-        rtmp_lbl.setStyleSheet("color:#6c7086; font-size:11px;")
+        def _lbl(t: str) -> QLabel:
+            l = QLabel(t); l.setStyleSheet("color:#6c7086; font-size:11px;"); return l
 
         self._rtmp_edit = QLineEdit()
         self._rtmp_edit.setObjectName("rtmpInput")
         self._rtmp_edit.setPlaceholderText("rtmp://live.twitch.tv/app/your_stream_key")
 
-        br_lbl = QLabel("Bitrate")
-        br_lbl.setStyleSheet("color:#6c7086; font-size:11px;")
         self._bitrate_combo = QComboBox()
         for br in FFmpegStreamer.BITRATES:
             self._bitrate_combo.addItem(br)
         self._bitrate_combo.setCurrentText("3000k")
-        self._bitrate_combo.setFixedWidth(80)
+        self._bitrate_combo.setFixedWidth(78)
+        self._bitrate_combo.setToolTip("Streaming bitrate")
+
+        self._preset_combo = QComboBox()
+        for p in FFmpegStreamer.PRESETS:
+            self._preset_combo.addItem(p)
+        self._preset_combo.setCurrentText("veryfast")
+        self._preset_combo.setFixedWidth(92)
+        self._preset_combo.setToolTip(
+            "libx264 encoding speed/quality preset.\n"
+            "ultrafast = lowest CPU; medium = best quality.\n"
+            "Ignored for hardware encoders.")
+
+        self._encoder_combo = QComboBox()
+        for label, _ in FFmpegStreamer.ENCODERS:
+            self._encoder_combo.addItem(label)
+        self._encoder_combo.setFixedWidth(170)
+        self._encoder_combo.setToolTip(
+            "Video encoder. Hardware encoders (NVENC/QSV/AMF)\n"
+            "offload encoding to GPU, drastically cutting CPU load.\n"
+            "Requires matching GPU drivers.")
+
+        self._sfps_combo = QComboBox()
+        for v in ["cam fps", "10", "15", "20", "24", "30"]:
+            self._sfps_combo.addItem(v)
+        self._sfps_combo.setFixedWidth(72)
+        self._sfps_combo.setToolTip(
+            "Stream FPS — cap how many frames per second are sent to FFmpeg.\n"
+            "Lower = less CPU. 'cam fps' = match camera setting.")
 
         self._live_btn = QPushButton("▶  Go Live")
         self._live_btn.setObjectName("liveBtn")
         self._live_btn.setCheckable(True)
         self._live_btn.toggled.connect(self._toggle_streaming)
 
-        sl.addWidget(rtmp_lbl)
+        sl.addWidget(_lbl("RTMP"))
         sl.addWidget(self._rtmp_edit, 1)
-        sl.addWidget(br_lbl)
-        sl.addWidget(self._bitrate_combo)
+        sl.addWidget(_lbl("bps")); sl.addWidget(self._bitrate_combo)
+        sl.addWidget(_lbl("preset")); sl.addWidget(self._preset_combo)
+        sl.addWidget(_lbl("enc")); sl.addWidget(self._encoder_combo)
+        sl.addWidget(_lbl("fps")); sl.addWidget(self._sfps_combo)
         sl.addWidget(self._live_btn)
 
         outer.addWidget(row1)
@@ -1689,7 +1801,39 @@ class MainWindow(QMainWindow):
         self._cam.set_fps(fps)
         self._rec_fps = fps
 
+    # ── CPU monitor ───────────────────────────────────────────────────────────
+
+    def _update_cpu(self):
+        if not _HAS_PSUTIL:
+            self._cpu_label.setText("CPU (pip install psutil)")
+            return
+        try:
+            cpu = self._self_proc.cpu_percent()
+            # add FFmpeg child if streaming
+            streamer = self.preview._streamer
+            if streamer and streamer.pid:
+                try:
+                    ffp = _psutil.Process(streamer.pid)
+                    cpu += ffp.cpu_percent()
+                except _psutil.NoSuchProcess:
+                    pass
+            color = "#a6e3a1" if cpu < 50 else "#f9e2af" if cpu < 80 else "#f38ba8"
+            self._cpu_label.setText(f"CPU {cpu:5.1f}%")
+            self._cpu_label.setStyleSheet(
+                f"color:{color}; font-size:11px; font-weight:700;"
+                f"font-family:'Courier New',monospace;"
+                f"padding:0 8px; border:1px solid #313244; border-radius:4px;")
+        except Exception:
+            pass
+
     # ── streaming ─────────────────────────────────────────────────────────────
+
+    def _streaming_controls(self, enabled: bool):
+        self._rtmp_edit.setEnabled(enabled)
+        self._bitrate_combo.setEnabled(enabled)
+        self._preset_combo.setEnabled(enabled)
+        self._encoder_combo.setEnabled(enabled)
+        self._sfps_combo.setEnabled(enabled)
 
     def _toggle_streaming(self, on: bool):
         if on:
@@ -1698,14 +1842,19 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "No URL", "Enter an RTMP URL before going live.")
                 self._live_btn.setChecked(False)
                 return
-            bitrate = self._bitrate_combo.currentText()
-            ok = self.preview.start_streaming(url, self._rec_fps, bitrate)
+            bitrate  = self._bitrate_combo.currentText()
+            preset   = self._preset_combo.currentText()
+            enc_idx  = self._encoder_combo.currentIndex()
+            encoder  = FFmpegStreamer.ENCODERS[enc_idx][1]
+            sfps_txt = self._sfps_combo.currentText()
+            stream_fps = 0 if sfps_txt == "cam fps" else int(sfps_txt)
+            ok = self.preview.start_streaming(
+                url, self._rec_fps, bitrate, preset, encoder, stream_fps)
             if ok:
                 self._live_btn.setText("⏹  End Stream")
-                self._rtmp_edit.setEnabled(False)
-                self._bitrate_combo.setEnabled(False)
-                self._status.setText(f"🔴  Live → {url[:50]}{'…' if len(url) > 50 else ''}")
-                # poll health every 2 s
+                self._streaming_controls(False)
+                self._status.setText(
+                    f"🔴  Live → {url[:50]}{'…' if len(url) > 50 else ''}")
                 self._stream_timer = QTimer()
                 self._stream_timer.timeout.connect(self._check_stream_health)
                 self._stream_timer.start(2000)
@@ -1718,8 +1867,7 @@ class MainWindow(QMainWindow):
                 self._stream_timer.stop()
             self.preview.stop_streaming()
             self._live_btn.setText("▶  Go Live")
-            self._rtmp_edit.setEnabled(True)
-            self._bitrate_combo.setEnabled(True)
+            self._streaming_controls(True)
             self._status.setText("Stream ended.")
 
     def _check_stream_health(self):
@@ -1730,8 +1878,7 @@ class MainWindow(QMainWindow):
             self.preview.stop_streaming()
             self._live_btn.setChecked(False)
             self._live_btn.setText("▶  Go Live")
-            self._rtmp_edit.setEnabled(True)
-            self._bitrate_combo.setEnabled(True)
+            self._streaming_controls(True)
             self._status.setText(f"⚠  Stream stopped: {err[:80]}")
 
     # ── recording / screenshot ────────────────────────────────────────────────
