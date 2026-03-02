@@ -6,7 +6,11 @@ Run with:  python webcam_studio.py
 """
 
 import copy
+import queue
+import shutil
+import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -153,6 +157,28 @@ QPushButton#iconBtn {
     font-size: 14px;
 }
 QPushButton#iconBtn:hover { color: #cdd6f4; }
+
+QPushButton#liveBtn {
+    background: #1a2e1a;
+    border: 1px solid #a6e3a1;
+    color: #a6e3a1;
+    font-weight: 700;
+    padding: 8px 22px;
+}
+QPushButton#liveBtn:hover   { background: #a6e3a1; color: #0f1117; }
+QPushButton#liveBtn:checked { background: #2a6b2a; border-color: #a6e3a1; color: #fff; }
+
+QLineEdit#rtmpInput {
+    background: #1e2030;
+    border: 1px solid #313244;
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: #cdd6f4;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    min-width: 280px;
+}
+QLineEdit#rtmpInput:focus { border-color: #a6e3a1; }
 
 /* ── Combos ── */
 QComboBox {
@@ -473,6 +499,113 @@ class CameraThread(QThread):
         self.wait(3000)
 
 
+# ─── RTMP Streamer ─────────────────────────────────────────────────────────────
+
+class FFmpegStreamer:
+    """Pipes BGR numpy frames into FFmpeg which encodes and pushes to RTMP.
+
+    Runs a background writer thread so the Qt main thread never blocks on I/O.
+    Frames are dropped (not queued) when FFmpeg can't keep up, to avoid lag.
+    """
+
+    BITRATES = ["1000k", "2000k", "3000k", "4500k", "6000k", "8000k"]
+
+    def __init__(self, url: str, width: int, height: int,
+                 fps: int, bitrate: str = "3000k", audio_device: str = ""):
+        self._url = url
+        self._width = width
+        self._height = height
+        self._fps = fps
+        self._bitrate = bitrate
+        self._q: queue.Queue = queue.Queue(maxsize=4)
+        self._running = False
+        self._proc: subprocess.Popen | None = None
+        self._thread: threading.Thread | None = None
+        self.error: str = ""
+
+    def start(self) -> bool:
+        if not shutil.which("ffmpeg"):
+            self.error = "ffmpeg not found in PATH"
+            return False
+        cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
+            # Raw BGR video on stdin
+            "-f", "rawvideo", "-vcodec", "rawvideo",
+            "-pix_fmt", "bgr24",
+            "-s", f"{self._width}x{self._height}",
+            "-r", str(self._fps),
+            "-i", "pipe:0",
+            # Silent audio track
+            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            # Video encode
+            "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
+            "-pix_fmt", "yuv420p",
+            "-g", str(self._fps * 2),
+            "-b:v", self._bitrate, "-maxrate", self._bitrate,
+            "-bufsize", str(int(self._bitrate[:-1]) * 2) + "k",
+            # Audio encode
+            "-c:a", "aac", "-b:a", "128k",
+            "-shortest",
+            "-f", "flv", self._url,
+        ]
+        try:
+            self._proc = subprocess.Popen(
+                cmd, stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        except Exception as exc:
+            self.error = str(exc)
+            return False
+
+        self._running = True
+        self._thread = threading.Thread(target=self._writer, daemon=True)
+        self._thread.start()
+        return True
+
+    def _writer(self):
+        assert self._proc is not None
+        while self._running:
+            try:
+                frame = self._q.get(timeout=1.0)
+                if frame is None:
+                    break
+                self._proc.stdin.write(frame.tobytes())
+            except queue.Empty:
+                continue
+            except (BrokenPipeError, OSError):
+                # FFmpeg died
+                _, err = self._proc.communicate()
+                self.error = err.decode(errors="replace").strip()[-200:]
+                self._running = False
+                break
+
+    def push(self, frame: np.ndarray):
+        if not self._running:
+            return
+        try:
+            self._q.put_nowait(frame)
+        except queue.Full:
+            pass   # drop — better than buffering latency
+
+    def alive(self) -> bool:
+        return self._running and (self._proc is None or self._proc.poll() is None)
+
+    def stop(self):
+        self._running = False
+        self._q.put(None)          # unblock writer thread
+        if self._thread:
+            self._thread.join(timeout=3)
+        if self._proc:
+            try:
+                self._proc.stdin.close()
+            except OSError:
+                pass
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+
+
 # ─── Preview Widget ────────────────────────────────────────────────────────────
 
 class PreviewWidget(QWidget):
@@ -514,6 +647,10 @@ class PreviewWidget(QWidget):
         # recording
         self._writer: cv2.VideoWriter | None = None
         self._recording = False
+
+        # streaming
+        self._streamer: FFmpegStreamer | None = None
+        self._streaming = False
 
     # ── frame update ──────────────────────────────────────────────────────────
 
@@ -562,6 +699,11 @@ class PreviewWidget(QWidget):
 
         if self._recording and self._writer:
             self._writer.write(frame)
+
+        if self._streaming and self._streamer and self._streamer.alive():
+            composed = self._compose_frame()
+            if composed is not None:
+                self._streamer.push(composed)
 
         self.update()
 
@@ -845,6 +987,54 @@ class PreviewWidget(QWidget):
             self.selected.visible = not self.selected.visible
             self.overlays_changed.emit()
             self.update()
+
+    # ── compose (frame + overlays → BGR ndarray) ──────────────────────────────
+
+    def _compose_frame(self) -> np.ndarray | None:
+        """Render self.frame with all visible overlays painted on top.
+
+        Returns a BGR uint8 ndarray at the camera's native resolution,
+        suitable for piping to FFmpeg or writing to a VideoWriter.
+        """
+        if self.frame is None:
+            return None
+        fh, fw = self.frame.shape[:2]
+
+        # paint into an off-screen RGB QImage at native resolution
+        qimg = QImage(fw, fh, QImage.Format.Format_RGB888)
+        rgb = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+        src = QImage(rgb.tobytes(), fw, fh, fw * 3, QImage.Format.Format_RGB888)
+
+        p = QPainter(qimg)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.drawImage(0, 0, src)
+        for ov in self.overlays:
+            if ov.visible:
+                ov.draw(p)
+        p.end()
+
+        # QImage (RGB) → numpy → BGR
+        ptr = qimg.bits()
+        arr = np.frombuffer(ptr, dtype=np.uint8).reshape((fh, fw, 3)).copy()
+        return arr[:, :, ::-1]   # RGB → BGR
+
+    # ── streaming ─────────────────────────────────────────────────────────────
+
+    def start_streaming(self, url: str, fps: int, bitrate: str) -> bool:
+        if self.frame is None:
+            return False
+        fh, fw = self.frame.shape[:2]
+        self._streamer = FFmpegStreamer(url, fw, fh, fps, bitrate)
+        ok = self._streamer.start()
+        if ok:
+            self._streaming = True
+        return ok
+
+    def stop_streaming(self):
+        self._streaming = False
+        if self._streamer:
+            self._streamer.stop()
+            self._streamer = None
 
     # ── recording / capture ────────────────────────────────────────────────────
 
@@ -1265,16 +1455,17 @@ class MainWindow(QMainWindow):
         return w
 
     def _build_bottom(self) -> QWidget:
-        bar = QWidget(); bar.setObjectName("bottombar"); bar.setFixedHeight(58)
-        bl = QHBoxLayout(bar); bl.setContentsMargins(20, 8, 20, 8); bl.setSpacing(12)
+        bar = QWidget(); bar.setObjectName("bottombar")
+        outer = QVBoxLayout(bar); outer.setSpacing(0); outer.setContentsMargins(0, 0, 0, 0)
 
-        fps_cb = QCheckBox("FPS")
-        fps_cb.setChecked(True)
+        # ── row 1: view toggles + record/screenshot ───────────────────────────
+        row1 = QWidget(); row1.setObjectName("bottombar")
+        bl = QHBoxLayout(row1); bl.setContentsMargins(20, 8, 20, 6); bl.setSpacing(12)
+
+        fps_cb = QCheckBox("FPS"); fps_cb.setChecked(True)
         fps_cb.toggled.connect(lambda v: setattr(self.preview, "show_fps", v))
-
         grid_cb = QCheckBox("Grid")
         grid_cb.toggled.connect(lambda v: setattr(self.preview, "show_grid", v))
-
         safe_cb = QCheckBox("Safe Area")
         safe_cb.toggled.connect(lambda v: setattr(self.preview, "show_safe", v))
 
@@ -1289,8 +1480,45 @@ class MainWindow(QMainWindow):
 
         bl.addWidget(fps_cb); bl.addWidget(grid_cb); bl.addWidget(safe_cb)
         bl.addStretch()
-        bl.addWidget(self._snap_btn)
-        bl.addWidget(self._rec_btn)
+        bl.addWidget(self._snap_btn); bl.addWidget(self._rec_btn)
+
+        # ── divider ───────────────────────────────────────────────────────────
+        div = QFrame(); div.setFrameShape(QFrame.Shape.HLine)
+        div.setStyleSheet("background:#252632; max-height:1px;")
+
+        # ── row 2: RTMP streaming ─────────────────────────────────────────────
+        row2 = QWidget(); row2.setObjectName("bottombar")
+        sl = QHBoxLayout(row2); sl.setContentsMargins(20, 6, 20, 8); sl.setSpacing(10)
+
+        rtmp_lbl = QLabel("RTMP URL")
+        rtmp_lbl.setStyleSheet("color:#6c7086; font-size:11px;")
+
+        self._rtmp_edit = QLineEdit()
+        self._rtmp_edit.setObjectName("rtmpInput")
+        self._rtmp_edit.setPlaceholderText("rtmp://live.twitch.tv/app/your_stream_key")
+
+        br_lbl = QLabel("Bitrate")
+        br_lbl.setStyleSheet("color:#6c7086; font-size:11px;")
+        self._bitrate_combo = QComboBox()
+        for br in FFmpegStreamer.BITRATES:
+            self._bitrate_combo.addItem(br)
+        self._bitrate_combo.setCurrentText("3000k")
+        self._bitrate_combo.setFixedWidth(80)
+
+        self._live_btn = QPushButton("▶  Go Live")
+        self._live_btn.setObjectName("liveBtn")
+        self._live_btn.setCheckable(True)
+        self._live_btn.toggled.connect(self._toggle_streaming)
+
+        sl.addWidget(rtmp_lbl)
+        sl.addWidget(self._rtmp_edit, 1)
+        sl.addWidget(br_lbl)
+        sl.addWidget(self._bitrate_combo)
+        sl.addWidget(self._live_btn)
+
+        outer.addWidget(row1)
+        outer.addWidget(div)
+        outer.addWidget(row2)
         return bar
 
     # ─── right panel: overlays + properties ──────────────────────────────────
@@ -1461,6 +1689,51 @@ class MainWindow(QMainWindow):
         self._cam.set_fps(fps)
         self._rec_fps = fps
 
+    # ── streaming ─────────────────────────────────────────────────────────────
+
+    def _toggle_streaming(self, on: bool):
+        if on:
+            url = self._rtmp_edit.text().strip()
+            if not url:
+                QMessageBox.warning(self, "No URL", "Enter an RTMP URL before going live.")
+                self._live_btn.setChecked(False)
+                return
+            bitrate = self._bitrate_combo.currentText()
+            ok = self.preview.start_streaming(url, self._rec_fps, bitrate)
+            if ok:
+                self._live_btn.setText("⏹  End Stream")
+                self._rtmp_edit.setEnabled(False)
+                self._bitrate_combo.setEnabled(False)
+                self._status.setText(f"🔴  Live → {url[:50]}{'…' if len(url) > 50 else ''}")
+                # poll health every 2 s
+                self._stream_timer = QTimer()
+                self._stream_timer.timeout.connect(self._check_stream_health)
+                self._stream_timer.start(2000)
+            else:
+                err = self.preview._streamer.error if self.preview._streamer else "unknown"
+                self._live_btn.setChecked(False)
+                self._status.setText(f"⚠  Stream failed: {err}")
+        else:
+            if hasattr(self, "_stream_timer"):
+                self._stream_timer.stop()
+            self.preview.stop_streaming()
+            self._live_btn.setText("▶  Go Live")
+            self._rtmp_edit.setEnabled(True)
+            self._bitrate_combo.setEnabled(True)
+            self._status.setText("Stream ended.")
+
+    def _check_stream_health(self):
+        """Detect if FFmpeg died unexpectedly and reset the UI."""
+        if self.preview._streamer and not self.preview._streamer.alive():
+            err = self.preview._streamer.error or "FFmpeg exited unexpectedly"
+            self._stream_timer.stop()
+            self.preview.stop_streaming()
+            self._live_btn.setChecked(False)
+            self._live_btn.setText("▶  Go Live")
+            self._rtmp_edit.setEnabled(True)
+            self._bitrate_combo.setEnabled(True)
+            self._status.setText(f"⚠  Stream stopped: {err[:80]}")
+
     # ── recording / screenshot ────────────────────────────────────────────────
 
     def _toggle_recording(self, on: bool):
@@ -1499,6 +1772,7 @@ class MainWindow(QMainWindow):
     # ── cleanup ────────────────────────────────────────────────────────────────
 
     def closeEvent(self, e):
+        self.preview.stop_streaming()
         self.preview.stop_recording()
         self._cam.stop()
         e.accept()
