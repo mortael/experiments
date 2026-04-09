@@ -509,6 +509,13 @@ class WP_Watermark_Admin {
 			</tr>
 		</table>
 
+		<!-- Live preview -->
+		<div class="wpwm-preview-wrap">
+			<h4 id="wpwm-preview-title"><?php esc_html_e( 'Live Preview', 'wp-watermark-pro' ); ?></h4>
+			<canvas id="wpwm-preview-canvas" width="400" height="250" role="img" aria-labelledby="wpwm-preview-title" aria-describedby="wpwm-preview-description"><?php esc_html_e( 'Live preview of the current watermark settings.', 'wp-watermark-pro' ); ?></canvas>
+			<p id="wpwm-preview-description" class="description"><?php esc_html_e( 'Simulates a 1200×750 px image at 33% scale. Colours and positions are accurate; font rendering may differ slightly from the server-side GD output.', 'wp-watermark-pro' ); ?></p>
+		</div>
+
 		<p class="wpwm-editor-actions">
 			<button type="button" class="button button-primary" id="wpwm-save-preset"><?php esc_html_e( 'Save Preset', 'wp-watermark-pro' ); ?></button>
 			<button type="button" class="button" id="wpwm-cancel-preset"><?php esc_html_e( 'Cancel', 'wp-watermark-pro' ); ?></button>

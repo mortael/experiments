@@ -154,12 +154,24 @@
         $('#wpwm-f-padding').val(20);
         $('#wpwm-f-opacity').val(70); $('#wpwm-opacity-val').text(70);
         $('.wpwm-status').text('').removeClass('success error');
+        _previewLogoImg = null;
+        _previewLogoUrl = '';
+        renderPreview();
     }
 
     function populateEditor(preset) {
         $('#wpwm-preset-id').val(preset.id);
         $('#wpwm-editor-title').text('Edit: ' + preset.name);
         $('#wpwm-f-name').val(preset.name);
+
+        // Always reset the logo preview DOM and cache before populating so a
+        // stale logo from the previously-edited preset is never carried over.
+        $('#wpwm-f-logo-id').val('0');
+        $('#wpwm-logo-preview').html('');
+        $('.wpwm-remove-logo').hide();
+        _previewLogoImg = null;
+        _previewLogoUrl = '';
+
         $('input[name="wpwm_type"][value="' + preset.type + '"]').prop('checked', true).trigger('change');
 
         if (preset.type === 'text') {
@@ -189,6 +201,7 @@
         $('#wpwm-f-opacity').val(preset.opacity || 70);
         $('#wpwm-opacity-val').text(preset.opacity || 70);
         $('.wpwm-status').text('').removeClass('success error');
+        updatePreviewLogo();
     }
 
     function bindPresetEditor() {
@@ -448,6 +461,229 @@
         });
     }
 
+    // ── Live preview ──────────────────────────────────────────────────────────
+
+    var _previewLogoImg = null;
+    var _previewLogoUrl = '';
+
+    /** Draw a sample "landscape photo" background on the canvas. */
+    function drawPreviewBackground(ctx, W, H) {
+        // Sky gradient
+        var sky = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+        sky.addColorStop(0, '#5ba3d9');
+        sky.addColorStop(1, '#a8d4f5');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H * 0.55);
+
+        // Ground gradient
+        var ground = ctx.createLinearGradient(0, H * 0.55, 0, H);
+        ground.addColorStop(0, '#6aaa5f');
+        ground.addColorStop(1, '#3e7c35');
+        ctx.fillStyle = ground;
+        ctx.fillRect(0, H * 0.55, W, H * 0.45);
+
+        // Sun
+        ctx.fillStyle = 'rgba(255, 210, 60, 0.85)';
+        ctx.beginPath();
+        ctx.arc(W * 0.78, H * 0.2, 22, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Horizon hill
+        ctx.fillStyle = 'rgba(55, 100, 50, 0.45)';
+        ctx.beginPath();
+        ctx.moveTo(0, H * 0.62);
+        ctx.bezierCurveTo(W * 0.15, H * 0.44, W * 0.38, H * 0.48, W * 0.55, H * 0.54);
+        ctx.bezierCurveTo(W * 0.72, H * 0.59, W * 0.88, H * 0.5, W, H * 0.57);
+        ctx.lineTo(W, H);
+        ctx.lineTo(0, H);
+        ctx.closePath();
+        ctx.fill();
+
+        // Simple cloud
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.beginPath();
+        ctx.arc(W * 0.25, H * 0.18, 14, 0, Math.PI * 2);
+        ctx.arc(W * 0.33, H * 0.15, 18, 0, Math.PI * 2);
+        ctx.arc(W * 0.42, H * 0.18, 13, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    /**
+     * Compute the canvas centre point (cx, cy) for a watermark element
+     * with known rendered dimensions (elW × elH) at a given position.
+     */
+    function calcPreviewPos(pos, W, H, padX, padY, elW, elH) {
+        var x, y;
+        if      (pos.indexOf('left')   !== -1) { x = padX + elW / 2; }
+        else if (pos.indexOf('right')  !== -1) { x = W - padX - elW / 2; }
+        else                                   { x = W / 2; }
+
+        if      (pos.indexOf('top')    !== -1) { y = padY + elH / 2; }
+        else if (pos.indexOf('bottom') !== -1) { y = H - padY - elH / 2; }
+        else                                   { y = H / 2; }
+
+        return { x: x, y: y };
+    }
+
+    function drawTextPreview(ctx, W, H, padX, padY, scaleX, pos) {
+        var raw = $('#wpwm-f-text').val() || '© {year} {site_name}';
+        var text = raw
+            .replace(/\{year\}/g,      new Date().getFullYear())
+            .replace(/\{site_name\}/g, 'My Site')
+            .replace(/\{site_url\}/g,  'mysite.com');
+
+        var fontSizePx  = Math.max(8, Math.round((parseInt($('#wpwm-f-font-size').val(), 10) || 24) * scaleX));
+        var fontColor   = $('#wpwm-f-font-color').val()  || '#ffffff';
+        var rotation    = (parseFloat($('#wpwm-f-rotation').val())        || 0) * Math.PI / 180;
+        var hasShadow   = $('#wpwm-f-shadow').is(':checked');
+        var shadowColor = $('#wpwm-f-shadow-color').val() || '#000000';
+        var shadowOff   = Math.max(1, Math.round((parseInt($('#wpwm-f-shadow-offset').val(), 10) || 2) * scaleX));
+
+        ctx.font         = 'bold ' + fontSizePx + 'px Arial, sans-serif';
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+
+        var tw = ctx.measureText(text).width;
+        var th = fontSizePx;
+        var cp = calcPreviewPos(pos, W, H, padX, padY, tw, th);
+
+        ctx.save();
+        ctx.translate(cp.x, cp.y);
+        ctx.rotate(rotation);
+
+        if (hasShadow) {
+            ctx.fillStyle = shadowColor;
+            ctx.fillText(text, shadowOff, shadowOff);
+        }
+        ctx.fillStyle = fontColor;
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+    }
+
+    function drawLogoPreview(ctx, W, H, padX, padY, scaleX, pos) {
+        var logoWidthPct = parseInt($('#wpwm-f-logo-width').val(), 10) || 20;
+        var logoW        = Math.max(10, Math.round(logoWidthPct / 100 * W));
+
+        if (_previewLogoImg) {
+            var naturalW = _previewLogoImg.naturalWidth;
+            var aspect   = naturalW > 0 ? (_previewLogoImg.naturalHeight / naturalW) : 1;
+            var logoH    = Math.round(logoW * aspect);
+            var cp     = calcPreviewPos(pos, W, H, padX, padY, logoW, logoH);
+            ctx.drawImage(_previewLogoImg, cp.x - logoW / 2, cp.y - logoH / 2, logoW, logoH);
+        } else {
+            // Placeholder dashed rectangle
+            var logoH2 = Math.round(logoW * 0.5);
+            var cp2    = calcPreviewPos(pos, W, H, padX, padY, logoW, logoH2);
+            var x0     = Math.round(cp2.x - logoW / 2);
+            var y0     = Math.round(cp2.y - logoH2 / 2);
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth   = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.strokeRect(x0, y0, logoW, logoH2);
+            ctx.setLineDash([]);
+
+            ctx.fillStyle    = '#ffffff';
+            ctx.font         = Math.max(9, Math.round(logoH2 * 0.4)) + 'px Arial, sans-serif';
+            ctx.textAlign    = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('LOGO', cp2.x, cp2.y);
+        }
+    }
+
+    function renderPreview() {
+        var $canvas = $('#wpwm-preview-canvas');
+        if (!$canvas.length) { return; }
+        var canvas = $canvas[0];
+        var ctx    = canvas.getContext('2d');
+        var W      = canvas.width;   // 400
+        var H      = canvas.height;  // 250
+
+        ctx.clearRect(0, 0, W, H);
+        drawPreviewBackground(ctx, W, H);
+
+        var type    = $('input[name="wpwm_type"]:checked').val() || 'text';
+        var pos     = $('#wpwm-f-position').val()              || 'bottom-right';
+        var paddingRaw = parseInt($('#wpwm-f-padding').val(), 10);
+        var padding    = isNaN(paddingRaw) ? 0 : paddingRaw;
+        var opacityRaw = parseInt($('#wpwm-f-opacity').val(), 10);
+        var opacity    = (isNaN(opacityRaw) ? 70 : opacityRaw) / 100;
+
+        // Canvas represents a 1200 × 750 px image
+        var scaleX = W / 1200;
+        var scaleY = H / 750;
+        var padX   = Math.round(padding * scaleX);
+        var padY   = Math.round(padding * scaleY);
+
+        ctx.globalAlpha = opacity;
+
+        if (type === 'text') {
+            drawTextPreview(ctx, W, H, padX, padY, scaleX, pos);
+        } else {
+            drawLogoPreview(ctx, W, H, padX, padY, scaleX, pos);
+        }
+
+        ctx.globalAlpha = 1.0;
+    }
+
+    /** Load (or re-use) the logo image then re-render the preview. */
+    function updatePreviewLogo() {
+        var $img = $('#wpwm-logo-preview img');
+        var url  = $img.length ? $img.attr('src') : '';
+
+        if (!url) {
+            _previewLogoImg = null;
+            _previewLogoUrl = '';
+            renderPreview();
+            return;
+        }
+        if (url === _previewLogoUrl && _previewLogoImg) {
+            renderPreview();
+            return;
+        }
+        var img    = new Image();
+
+        // Only enable anonymous CORS for external images on a different host
+        if (/^https?:\/\//i.test(url)) {
+            var link = document.createElement('a');
+            link.href = url;
+            if (link.host && link.host !== window.location.host) {
+                img.crossOrigin = 'anonymous';
+            }
+        }
+
+        img.onload  = function () { _previewLogoImg = img; _previewLogoUrl = url; renderPreview(); };
+        img.onerror = function () { _previewLogoImg = null; renderPreview(); };
+        img.src = url;
+    }
+
+    function bindPreview() {
+        // Re-render on any field change inside the editor
+        $(document).on('input change', '#wpwm-preset-editor input, #wpwm-preset-editor select', renderPreview);
+
+        // Re-render when the selected logo actually changes.
+        $(document).on('change', '#wpwm-f-logo-id', updatePreviewLogo);
+
+        // Re-render after logo removal once the DOM has been updated.
+        $(document).on('click', '.wpwm-remove-logo', function () {
+            setTimeout(updatePreviewLogo, 0);
+        });
+
+        // Observe preview DOM updates from the media uploader so the canvas refreshes
+        // after the user selects a logo in the modal.
+        var previewNode = document.getElementById('wpwm-logo-preview');
+        if (previewNode && window.MutationObserver) {
+            new MutationObserver(function () {
+                updatePreviewLogo();
+            }).observe(previewNode, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['src']
+            });
+        }
+    }
+
     // ── Backup management (Backups tab) ───────────────────────────────────────
 
     function bindBackupActions() {
@@ -503,6 +739,7 @@
         bindBatchApply();
         bindBackupActions();
         bindRegeneratePreset();
+        bindPreview();
 
         // Show success notice after settings save
         if (window.location.search.indexOf('updated=1') !== -1) {
