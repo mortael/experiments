@@ -163,6 +163,15 @@
         $('#wpwm-preset-id').val(preset.id);
         $('#wpwm-editor-title').text('Edit: ' + preset.name);
         $('#wpwm-f-name').val(preset.name);
+
+        // Always reset the logo preview DOM and cache before populating so a
+        // stale logo from the previously-edited preset is never carried over.
+        $('#wpwm-f-logo-id').val('0');
+        $('#wpwm-logo-preview').html('');
+        $('.wpwm-remove-logo').hide();
+        _previewLogoImg = null;
+        _previewLogoUrl = '';
+
         $('input[name="wpwm_type"][value="' + preset.type + '"]').prop('checked', true).trigger('change');
 
         if (preset.type === 'text') {
