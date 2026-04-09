@@ -367,6 +367,87 @@
         });
     }
 
+    // ── Preset regeneration ───────────────────────────────────────────────────
+
+    function runRegenerateBatch(ids, presetId, offset, $panel) {
+        if (offset >= ids.length) {
+            $panel.find('.wpwm-progress-text').text(wpwm.strings.done + ' (' + ids.length + ' processed)');
+            return;
+        }
+        var chunk = ids.slice(offset, offset + 10);
+        ajax('wpwm_regenerate_batch', { attachment_ids: chunk, preset_id: presetId }, function (data) {
+            var pct = Math.round((offset + chunk.length) / ids.length * 100);
+            $panel.find('.wpwm-progress-fill').css('width', pct + '%');
+            $panel.find('.wpwm-progress-text').text((offset + chunk.length) + ' / ' + ids.length);
+            var $list = $panel.find('.wpwm-reapply-results');
+            (data.success || []).forEach(function (i) {
+                $list.append('<li><span class="ok">✔</span> ' + $('<span>').text(i.title || '#' + i.id).html() + '</li>');
+            });
+            (data.failed || []).forEach(function (i) {
+                $list.append('<li><span class="fail">✘</span> ' + $('<span>').text(i.title || '#' + i.id).html() + ' — ' + $('<span>').text(i.message).html() + '</li>');
+            });
+            (data.skipped || []).forEach(function (i) {
+                $list.append('<li><span class="skipped">⚠</span> ' + $('<span>').text(i.title || '#' + i.id).html() + ' (skipped — no backup)</li>');
+            });
+            runRegenerateBatch(ids, presetId, offset + chunk.length, $panel);
+        }, function (err) {
+            $panel.find('.wpwm-progress-text').text('Error: ' + err);
+        });
+    }
+
+    function bindRegeneratePreset() {
+        $(document).on('click', '.wpwm-reapply-preset', function () {
+            var $card   = $(this).closest('.wpwm-preset-card');
+            var id      = $card.data('id');
+            var $panel  = $('#wpwm-reapply-' + id);
+
+            if ($panel.is(':visible')) {
+                $panel.slideUp(150);
+                return;
+            }
+
+            // Reset panel
+            $panel.find('.wpwm-reapply-info').text(wpwm.strings.processing);
+            $panel.find('.wpwm-progress-bar').hide();
+            $panel.find('.wpwm-progress-text').text('');
+            $panel.find('.wpwm-reapply-results').empty();
+            $panel.slideDown(200);
+
+            // Fetch usage count first
+            ajax('wpwm_get_preset_usage', { preset_id: id }, function (data) {
+                var total  = data.total;
+                var backed = data.with_backup;
+                var ids    = data.ids;
+
+                if (total === 0) {
+                    $panel.find('.wpwm-reapply-info').text('No images have used this preset yet.');
+                    return;
+                }
+
+                var msg = total + ' image(s) used this preset. ' + backed + ' have backups and can be regenerated.';
+                if (backed === 0) {
+                    msg += ' Nothing to do (backups required to avoid double-watermarking).';
+                    $panel.find('.wpwm-reapply-info').text(msg);
+                    return;
+                }
+
+                $panel.find('.wpwm-reapply-info').html(
+                    msg + '<br><button type="button" class="button button-primary wpwm-confirm-regen" style="margin-top:8px">' +
+                    'Re-apply to ' + backed + ' image(s)</button>'
+                );
+
+                $panel.on('click', '.wpwm-confirm-regen', function () {
+                    $(this).remove();
+                    $panel.find('.wpwm-reapply-info').text('Working…');
+                    $panel.find('.wpwm-progress-bar').show();
+                    runRegenerateBatch(ids, id, 0, $panel);
+                });
+            }, function (err) {
+                $panel.find('.wpwm-reapply-info').text('Error: ' + err);
+            });
+        });
+    }
+
     // ── Backup management (Backups tab) ───────────────────────────────────────
 
     function bindBackupActions() {
@@ -421,6 +502,7 @@
         bindPresetEditor();
         bindBatchApply();
         bindBackupActions();
+        bindRegeneratePreset();
 
         // Show success notice after settings save
         if (window.location.search.indexOf('updated=1') !== -1) {

@@ -195,3 +195,35 @@ input[type="range"] {
 
 .wpwm-pagination { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 0; }
 
+/* ── Section headings inside form-table ──────────────────────────────────── */
+.wpwm-section-heading {
+    margin: 0;
+    padding: 20px 0 4px;
+    font-size: 14px;
+    border-top: 1px solid #f0f0f1;
+    color: #1d2327;
+}
+
+/* ── Re-apply panel ──────────────────────────────────────────────────────── */
+.wpwm-reapply-panel {
+    border: 1px solid #c3c4c7;
+    border-top: none;
+    background: #f9f9f9;
+    padding: 14px 20px;
+    margin-bottom: 4px;
+}
+.wpwm-reapply-inner { max-width: 600px; }
+.wpwm-reapply-info  { margin: 0 0 10px; }
+.wpwm-reapply-results {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    max-height: 180px;
+    overflow-y: auto;
+    font-size: 12px;
+}
+.wpwm-reapply-results li { padding: 3px 0; border-bottom: 1px solid #ececec; }
+.wpwm-reapply-results .ok      { color: #2e7d32; }
+.wpwm-reapply-results .fail    { color: #c62828; }
+.wpwm-reapply-results .skipped { color: #f57c00; }
+

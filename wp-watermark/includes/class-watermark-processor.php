@@ -35,6 +35,29 @@ class WP_Watermark_Processor {
 		}
 
 		$settings = WP_Watermark_Pro::get_settings();
+		$mime     = get_post_mime_type( $attachment_id );
+		$rules    = $settings['conditional_rules'] ?? [];
+
+		// ── Conditional rules ─────────────────────────────────────────────────
+		if ( ! empty( $rules['skip_watermarked'] ) && get_post_meta( $attachment_id, '_wpwm_watermarked', true ) ) {
+			return new WP_Error( 'already_watermarked', 'Image already watermarked, skipped.' );
+		}
+
+		$min_w = (int) ( $rules['min_width']  ?? 0 );
+		$min_h = (int) ( $rules['min_height'] ?? 0 );
+		if ( $min_w > 0 || $min_h > 0 ) {
+			$dims = @getimagesize( $file_path );
+			if ( $dims && ( ( $min_w > 0 && $dims[0] < $min_w ) || ( $min_h > 0 && $dims[1] < $min_h ) ) ) {
+				return new WP_Error( 'too_small', sprintf( 'Image is %d×%d px (minimum %d×%d), skipped.', $dims[0], $dims[1], $min_w, $min_h ) );
+			}
+		}
+
+		$exclude_mime = (array) ( $rules['exclude_mime'] ?? [] );
+		if ( $exclude_mime && in_array( $mime, $exclude_mime, true ) ) {
+			return new WP_Error( 'excluded_mime', "MIME type {$mime} is excluded from watermarking." );
+		}
+		// ─────────────────────────────────────────────────────────────────────
+
 		if ( ! empty( $settings['backup_originals'] ) ) {
 			$backup = $this->create_backup( $file_path );
 			if ( is_wp_error( $backup ) ) {
@@ -49,8 +72,7 @@ class WP_Watermark_Processor {
 
 		@ini_set( 'memory_limit', '256M' ); // large images need headroom
 
-		$mime      = get_post_mime_type( $attachment_id );
-		$image_res = $this->load_image( $file_path, $mime );
+		$image_res = $this->load_image( $file_path, $mime ); // $mime set above
 		if ( is_wp_error( $image_res ) ) {
 			return $image_res;
 		}

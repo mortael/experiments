@@ -26,6 +26,8 @@ if ( ! extension_loaded( 'gd' ) ) {
 require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-processor.php';
 require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-admin.php';
 require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-protection.php';
+require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-hotlink.php';
+require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-woocommerce.php';
 
 final class WP_Watermark_Pro {
 
@@ -56,10 +58,30 @@ final class WP_Watermark_Pro {
 		if ( ! empty( $settings['auto_watermark'] ) && ! empty( $settings['default_preset'] ) ) {
 			add_filter( 'wp_generate_attachment_metadata', [ $this, 'auto_watermark_on_upload' ], 20, 2 );
 		}
-
+		if ( ! empty( $settings['strip_exif'] ) ) {
+			add_filter( 'wp_handle_upload', [ $this, 'strip_exif_on_upload' ], 5, 2 );
+		}
 		if ( ! is_admin() && ! empty( $settings['protection']['enabled'] ) ) {
 			WP_Watermark_Protection::get_instance()->init();
 		}
+		if ( WP_Watermark_Woocommerce::is_active() && ! empty( $settings['woocommerce']['enabled'] ) ) {
+			WP_Watermark_Woocommerce::get_instance();
+		}
+	}
+
+	/** Re-save JPEG via GD on upload — GD never writes EXIF, so this strips all metadata. */
+	public function strip_exif_on_upload( array $file, string $action ): array {
+		if ( ! in_array( $file['type'] ?? '', [ 'image/jpeg', 'image/jpg' ], true ) ) {
+			return $file;
+		}
+		@ini_set( 'memory_limit', '256M' );
+		$img = @imagecreatefromjpeg( $file['file'] );
+		if ( $img ) {
+			$quality = (int) ( self::get_settings()['strip_exif_quality'] ?? 92 );
+			imagejpeg( $img, $file['file'], $quality );
+			imagedestroy( $img );
+		}
+		return $file;
 	}
 
 	public function auto_watermark_on_upload( array $metadata, int $attachment_id ): array {
@@ -111,10 +133,29 @@ final class WP_Watermark_Pro {
 
 	private static function default_settings(): array {
 		return [
-			'auto_watermark'   => false,
-			'default_preset'   => 'preset_1',
-			'backup_originals' => true,
-			'protection'       => [
+			'auto_watermark'     => false,
+			'default_preset'     => 'preset_1',
+			'backup_originals'   => true,
+			'conditional_rules'  => [
+				'min_width'        => 0,
+				'min_height'       => 0,
+				'skip_watermarked' => true,
+				'exclude_mime'     => [],
+			],
+			'strip_exif'         => false,
+			'strip_exif_quality' => 92,
+			'hotlink'            => [
+				'enabled'          => false,
+				'action'           => 'deny',
+				'redirect_image'   => '',
+				'allowed_domains'  => '',
+			],
+			'woocommerce'        => [
+				'enabled'          => false,
+				'preset_id'        => '',
+				'apply_to_gallery' => false,
+			],
+			'protection'         => [
 				'enabled'         => false,
 				'rightclick'      => true,
 				'drag'            => true,

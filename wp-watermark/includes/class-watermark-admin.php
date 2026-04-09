@@ -18,17 +18,21 @@ class WP_Watermark_Admin {
 	private function __construct() {
 		add_action( 'admin_menu',                [ $this, 'register_menu' ] );
 		add_action( 'admin_enqueue_scripts',     [ $this, 'enqueue_assets' ] );
-		add_action( 'admin_post_wpwm_settings',   [ $this, 'save_general_settings' ] );
-		add_action( 'admin_post_wpwm_protection', [ $this, 'save_protection_settings' ] );
+		add_action( 'admin_post_wpwm_settings',    [ $this, 'save_general_settings' ] );
+		add_action( 'admin_post_wpwm_protection',  [ $this, 'save_protection_settings' ] );
+		add_action( 'admin_post_wpwm_hotlink',     [ $this, 'save_hotlink_settings' ] );
+		add_action( 'admin_post_wpwm_woocommerce', [ $this, 'save_woocommerce_settings' ] );
 
 		// AJAX
-		add_action( 'wp_ajax_wpwm_save_preset',       [ $this, 'ajax_save_preset' ] );
-		add_action( 'wp_ajax_wpwm_delete_preset',     [ $this, 'ajax_delete_preset' ] );
-		add_action( 'wp_ajax_wpwm_apply_single',      [ $this, 'ajax_apply_single' ] );
-		add_action( 'wp_ajax_wpwm_apply_batch',       [ $this, 'ajax_apply_batch' ] );
-		add_action( 'wp_ajax_wpwm_restore_original',  [ $this, 'ajax_restore_original' ] );
-		add_action( 'wp_ajax_wpwm_delete_backup',     [ $this, 'ajax_delete_backup' ] );
-		add_action( 'wp_ajax_wpwm_get_image_ids',     [ $this, 'ajax_get_image_ids' ] );
+		add_action( 'wp_ajax_wpwm_save_preset',        [ $this, 'ajax_save_preset' ] );
+		add_action( 'wp_ajax_wpwm_delete_preset',      [ $this, 'ajax_delete_preset' ] );
+		add_action( 'wp_ajax_wpwm_apply_single',       [ $this, 'ajax_apply_single' ] );
+		add_action( 'wp_ajax_wpwm_apply_batch',        [ $this, 'ajax_apply_batch' ] );
+		add_action( 'wp_ajax_wpwm_restore_original',   [ $this, 'ajax_restore_original' ] );
+		add_action( 'wp_ajax_wpwm_delete_backup',      [ $this, 'ajax_delete_backup' ] );
+		add_action( 'wp_ajax_wpwm_get_image_ids',      [ $this, 'ajax_get_image_ids' ] );
+		add_action( 'wp_ajax_wpwm_get_preset_usage',   [ $this, 'ajax_get_preset_usage' ] );
+		add_action( 'wp_ajax_wpwm_regenerate_batch',   [ $this, 'ajax_regenerate_batch' ] );
 
 		// Media library
 		add_filter( 'bulk_actions-upload',             [ $this, 'add_media_bulk_action' ] );
@@ -121,7 +125,11 @@ class WP_Watermark_Admin {
 					'apply'      => __( 'Batch Apply', 'wp-watermark-pro' ),
 					'backups'    => __( 'Backups', 'wp-watermark-pro' ),
 					'protection' => __( 'Image Protection', 'wp-watermark-pro' ),
+					'hotlink'    => __( 'Hotlink Protection', 'wp-watermark-pro' ),
 				];
+				if ( class_exists( 'WooCommerce' ) ) {
+					$tabs['woocommerce'] = __( 'WooCommerce', 'wp-watermark-pro' );
+				}
 				foreach ( $tabs as $slug => $label ) {
 					$url   = add_query_arg( [ 'page' => 'wp-watermark-pro', 'tab' => $slug ], admin_url( 'upload.php' ) );
 					$class = $active_tab === $slug ? 'nav-tab nav-tab-active' : 'nav-tab';
@@ -142,6 +150,10 @@ class WP_Watermark_Admin {
 					$this->render_backups_tab();
 				} elseif ( $active_tab === 'protection' ) {
 					$this->render_protection_tab();
+				} elseif ( $active_tab === 'hotlink' ) {
+					$this->render_hotlink_tab();
+				} elseif ( $active_tab === 'woocommerce' && class_exists( 'WooCommerce' ) ) {
+					$this->render_woocommerce_tab();
 				}
 				?>
 			</div>
@@ -201,6 +213,77 @@ class WP_Watermark_Admin {
 						<p class="description"><?php esc_html_e( 'Leave blank to use an auto-detected system font. Required for text watermarks with size/rotation control.', 'wp-watermark-pro' ); ?></p>
 					</td>
 				</tr>
+
+				<!-- ── Conditional Rules ── -->
+				<tr><td colspan="2"><h3 class="wpwm-section-heading"><?php esc_html_e( 'Conditional Watermark Rules', 'wp-watermark-pro' ); ?></h3></td></tr>
+				<?php $rules = $s['conditional_rules'] ?? []; ?>
+				<tr>
+					<th><?php esc_html_e( 'Skip already-watermarked', 'wp-watermark-pro' ); ?></th>
+					<td>
+						<label>
+							<input type="checkbox" name="skip_watermarked" value="1" <?php checked( ! empty( $rules['skip_watermarked'] ) ); ?>>
+							<?php esc_html_e( 'Do not re-watermark images that already have a watermark applied', 'wp-watermark-pro' ); ?>
+						</label>
+					</td>
+				</tr>
+				<tr>
+					<th><?php esc_html_e( 'Minimum dimensions', 'wp-watermark-pro' ); ?></th>
+					<td>
+						<label><?php esc_html_e( 'Width:', 'wp-watermark-pro' ); ?>
+							<input type="number" name="min_width" class="small-text" min="0"
+								value="<?php echo esc_attr( $rules['min_width'] ?? 0 ); ?>"> px
+						</label>
+						&nbsp;&nbsp;
+						<label><?php esc_html_e( 'Height:', 'wp-watermark-pro' ); ?>
+							<input type="number" name="min_height" class="small-text" min="0"
+								value="<?php echo esc_attr( $rules['min_height'] ?? 0 ); ?>"> px
+						</label>
+						<p class="description"><?php esc_html_e( 'Images smaller than these values will be skipped. Set to 0 to disable the check.', 'wp-watermark-pro' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th><?php esc_html_e( 'Exclude file types', 'wp-watermark-pro' ); ?></th>
+					<td>
+						<?php
+						$excluded = (array) ( $rules['exclude_mime'] ?? [] );
+						$mime_opts = [
+							'image/gif'     => 'GIF',
+							'image/png'     => 'PNG',
+							'image/webp'    => 'WebP',
+							'image/svg+xml' => 'SVG',
+						];
+						foreach ( $mime_opts as $mime => $label ) :
+						?>
+							<label style="margin-right:12px">
+								<input type="checkbox" name="exclude_mime[]" value="<?php echo esc_attr( $mime ); ?>"
+									<?php checked( in_array( $mime, $excluded, true ) ); ?>>
+								<?php echo esc_html( $label ); ?>
+							</label>
+						<?php endforeach; ?>
+						<p class="description"><?php esc_html_e( 'Selected file types will never be watermarked.', 'wp-watermark-pro' ); ?></p>
+					</td>
+				</tr>
+
+				<!-- ── EXIF Stripping ── -->
+				<tr><td colspan="2"><h3 class="wpwm-section-heading"><?php esc_html_e( 'EXIF Metadata Stripping', 'wp-watermark-pro' ); ?></h3></td></tr>
+				<tr>
+					<th><?php esc_html_e( 'Strip EXIF on upload', 'wp-watermark-pro' ); ?></th>
+					<td>
+						<label>
+							<input type="checkbox" name="strip_exif" value="1" <?php checked( ! empty( $s['strip_exif'] ) ); ?>>
+							<?php esc_html_e( 'Remove GPS location, device model, and other EXIF metadata from JPEG uploads', 'wp-watermark-pro' ); ?>
+						</label>
+						<p class="description"><?php esc_html_e( 'GD re-encodes the JPEG without EXIF. PNG/WebP/GIF carry no EXIF so are not affected.', 'wp-watermark-pro' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th><?php esc_html_e( 'Re-save quality', 'wp-watermark-pro' ); ?></th>
+					<td>
+						<input type="number" name="strip_exif_quality" class="small-text" min="60" max="100"
+							value="<?php echo esc_attr( $s['strip_exif_quality'] ?? 92 ); ?>">%
+						<p class="description"><?php esc_html_e( 'JPEG quality used when stripping EXIF (60–100). 92 is recommended.', 'wp-watermark-pro' ); ?></p>
+					</td>
+				</tr>
 			</table>
 
 			<?php submit_button( __( 'Save Settings', 'wp-watermark-pro' ) ); ?>
@@ -220,6 +303,15 @@ class WP_Watermark_Admin {
 		$s['backup_originals'] = ! empty( $_POST['backup_originals'] );
 		$s['default_preset']   = sanitize_key( $_POST['default_preset'] ?? '' );
 		$s['custom_font_path'] = sanitize_text_field( $_POST['custom_font_path'] ?? '' );
+
+		$s['conditional_rules'] = [
+			'min_width'        => max( 0, (int) ( $_POST['min_width']  ?? 0 ) ),
+			'min_height'       => max( 0, (int) ( $_POST['min_height'] ?? 0 ) ),
+			'skip_watermarked' => ! empty( $_POST['skip_watermarked'] ),
+			'exclude_mime'     => array_values( array_filter( array_map( 'sanitize_mime_type', (array) ( $_POST['exclude_mime'] ?? [] ) ) ) ),
+		];
+		$s['strip_exif']         = ! empty( $_POST['strip_exif'] );
+		$s['strip_exif_quality'] = max( 60, min( 100, (int) ( $_POST['strip_exif_quality'] ?? 92 ) ) );
 
 		WP_Watermark_Pro::save_settings( $s );
 		wp_redirect( add_query_arg( [ 'page' => 'wp-watermark-pro', 'tab' => 'general', 'updated' => '1' ], admin_url( 'upload.php' ) ) );
@@ -265,7 +357,18 @@ class WP_Watermark_Admin {
 			</div>
 			<div class="wpwm-preset-card-actions">
 				<button type="button" class="button wpwm-edit-preset"><?php esc_html_e( 'Edit', 'wp-watermark-pro' ); ?></button>
+				<button type="button" class="button wpwm-reapply-preset" title="<?php esc_attr_e( 'Re-apply this preset to all images that previously used it', 'wp-watermark-pro' ); ?>">
+					<?php esc_html_e( 'Re-apply', 'wp-watermark-pro' ); ?>
+				</button>
 				<button type="button" class="button button-link-delete wpwm-delete-preset"><?php esc_html_e( 'Delete', 'wp-watermark-pro' ); ?></button>
+			</div>
+		</div>
+		<div class="wpwm-reapply-panel" id="wpwm-reapply-<?php echo esc_attr( $p['id'] ); ?>" style="display:none;">
+			<div class="wpwm-reapply-inner">
+				<p class="wpwm-reapply-info"><?php esc_html_e( 'Loading usage info…', 'wp-watermark-pro' ); ?></p>
+				<div class="wpwm-progress-bar" style="display:none;"><div class="wpwm-progress-fill" style="width:0%"></div></div>
+				<p class="wpwm-progress-text"></p>
+				<ul class="wpwm-reapply-results"></ul>
 			</div>
 		</div>
 		<?php
@@ -989,6 +1092,280 @@ class WP_Watermark_Admin {
 			<?php submit_button( __( 'Save Protection Settings', 'wp-watermark-pro' ) ); ?>
 		</form>
 		<?php
+	}
+
+	// ── Hotlink Protection tab ────────────────────────────────────────────────
+
+	private function render_hotlink_tab(): void {
+		$s   = WP_Watermark_Pro::get_settings();
+		$cfg = $s['hotlink'] ?? [];
+		$hl  = new WP_Watermark_Hotlink();
+		$htaccess_path = $hl->htaccess_path();
+		$htaccess_exists = $htaccess_path && file_exists( $htaccess_path );
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'wpwm_save_hotlink', 'wpwm_hotlink_nonce' ); ?>
+			<input type="hidden" name="action" value="wpwm_hotlink">
+
+			<div class="wpwm-card">
+				<h3><?php esc_html_e( 'Apache Hotlink Protection', 'wp-watermark-pro' ); ?></h3>
+				<p class="description" style="margin-bottom:16px"><?php esc_html_e( 'Adds RewriteRule directives to your uploads .htaccess to block image embedding on external sites. Requires Apache with mod_rewrite.', 'wp-watermark-pro' ); ?></p>
+
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><?php esc_html_e( 'Enable hotlink protection', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="hl_enabled" value="1" <?php checked( ! empty( $cfg['enabled'] ) ); ?>>
+								<?php esc_html_e( 'Block external sites from embedding your images', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'When blocked, respond with', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<?php $action = $cfg['action'] ?? 'deny'; ?>
+							<label>
+								<input type="radio" name="hl_action" value="deny" <?php checked( $action, 'deny' ); ?>>
+								<?php esc_html_e( '403 Forbidden', 'wp-watermark-pro' ); ?>
+							</label>
+							&nbsp;&nbsp;
+							<label>
+								<input type="radio" name="hl_action" value="redirect" <?php checked( $action, 'redirect' ); ?>>
+								<?php esc_html_e( 'Redirect to placeholder image', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Placeholder image URL', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<input type="url" name="hl_redirect_image" class="regular-text"
+								value="<?php echo esc_attr( $cfg['redirect_image'] ?? '' ); ?>"
+								placeholder="https://example.com/no-hotlink.jpg">
+							<p class="description"><?php esc_html_e( 'Used only when "Redirect to placeholder" is selected above.', 'wp-watermark-pro' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Additional allowed domains', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<textarea name="hl_allowed_domains" rows="4" class="regular-text"
+								placeholder="cdn.example.com&#10;partner-site.com"><?php echo esc_textarea( $cfg['allowed_domains'] ?? '' ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'One domain per line. Your own site is always allowed.', 'wp-watermark-pro' ); ?></p>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="wpwm-card">
+				<h3><?php esc_html_e( '.htaccess Status', 'wp-watermark-pro' ); ?></h3>
+				<?php if ( $htaccess_path ) : ?>
+					<p>
+						<strong><?php esc_html_e( 'Path:', 'wp-watermark-pro' ); ?></strong>
+						<code><?php echo esc_html( $htaccess_path ); ?></code>
+					</p>
+					<?php if ( $htaccess_exists ) : ?>
+						<p><span class="wpwm-badge wpwm-badge-image">&#10003; <?php esc_html_e( 'File exists', 'wp-watermark-pro' ); ?></span></p>
+						<?php if ( strpos( file_get_contents( $htaccess_path ), 'WP Watermark Pro Hotlink' ) !== false ) : ?>
+							<p><span class="wpwm-badge wpwm-badge-text">&#10003; <?php esc_html_e( 'Rules are active', 'wp-watermark-pro' ); ?></span></p>
+						<?php else : ?>
+							<p><span class="wpwm-badge"><?php esc_html_e( 'Rules not written yet', 'wp-watermark-pro' ); ?></span></p>
+						<?php endif; ?>
+					<?php else : ?>
+						<p><span class="wpwm-badge"><?php esc_html_e( '.htaccess does not exist yet (will be created on save)', 'wp-watermark-pro' ); ?></span></p>
+					<?php endif; ?>
+					<?php if ( ! is_writable( $htaccess_exists ? $htaccess_path : dirname( $htaccess_path ) ) ) : ?>
+						<p class="notice notice-warning inline"><strong><?php esc_html_e( 'Warning:', 'wp-watermark-pro' ); ?></strong>
+						<?php esc_html_e( 'The uploads directory is not writable. Rules cannot be written.', 'wp-watermark-pro' ); ?></p>
+					<?php endif; ?>
+				<?php else : ?>
+					<p><?php esc_html_e( 'Could not determine uploads path.', 'wp-watermark-pro' ); ?></p>
+				<?php endif; ?>
+			</div>
+
+			<?php submit_button( __( 'Save & Apply Hotlink Rules', 'wp-watermark-pro' ) ); ?>
+		</form>
+		<?php
+	}
+
+	public function save_hotlink_settings(): void {
+		check_admin_referer( 'wpwm_save_hotlink', 'wpwm_hotlink_nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( -1 );
+		}
+
+		$s = WP_Watermark_Pro::get_settings();
+		$s['hotlink'] = [
+			'enabled'          => ! empty( $_POST['hl_enabled'] ),
+			'action'           => in_array( $_POST['hl_action'] ?? '', [ 'deny', 'redirect' ], true ) ? $_POST['hl_action'] : 'deny',
+			'redirect_image'   => esc_url_raw( $_POST['hl_redirect_image'] ?? '' ),
+			'allowed_domains'  => sanitize_textarea_field( $_POST['hl_allowed_domains'] ?? '' ),
+		];
+		WP_Watermark_Pro::save_settings( $s );
+
+		$hl     = new WP_Watermark_Hotlink();
+		$result = $hl->update_htaccess( $s['hotlink'] );
+		$extra  = is_wp_error( $result ) ? [ 'hl_error' => urlencode( $result->get_error_message() ) ] : [];
+
+		wp_redirect( add_query_arg( array_merge( [ 'page' => 'wp-watermark-pro', 'tab' => 'hotlink', 'updated' => '1' ], $extra ), admin_url( 'upload.php' ) ) );
+		exit;
+	}
+
+	// ── WooCommerce tab ───────────────────────────────────────────────────────
+
+	private function render_woocommerce_tab(): void {
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			echo '<p>' . esc_html__( 'WooCommerce is not active.', 'wp-watermark-pro' ) . '</p>';
+			return;
+		}
+
+		$s      = WP_Watermark_Pro::get_settings();
+		$wc     = $s['woocommerce'] ?? [];
+		$presets = WP_Watermark_Pro::get_presets();
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'wpwm_save_woocommerce', 'wpwm_woocommerce_nonce' ); ?>
+			<input type="hidden" name="action" value="wpwm_woocommerce">
+
+			<div class="wpwm-card">
+				<h3><?php esc_html_e( 'WooCommerce Product Image Watermarking', 'wp-watermark-pro' ); ?></h3>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><?php esc_html_e( 'Enable', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="wc_enabled" value="1" <?php checked( ! empty( $wc['enabled'] ) ); ?>>
+								<?php esc_html_e( 'Auto-watermark images when assigned as a WooCommerce product image', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Watermark preset', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<select name="wc_preset_id">
+								<option value=""><?php esc_html_e( '— Use default preset —', 'wp-watermark-pro' ); ?></option>
+								<?php foreach ( $presets as $id => $preset ) : ?>
+									<option value="<?php echo esc_attr( $id ); ?>" <?php selected( ( $wc['preset_id'] ?? '' ), $id ); ?>>
+										<?php echo esc_html( $preset['name'] ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+							<p class="description"><?php esc_html_e( 'Leave blank to use the default preset from General Settings.', 'wp-watermark-pro' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Gallery images', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="wc_gallery" value="1" <?php checked( ! empty( $wc['apply_to_gallery'] ) ); ?>>
+								<?php esc_html_e( 'Also watermark images added to the product gallery (not just the featured image)', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="wpwm-card" style="background:#e8f5e9;border-color:#a5d6a7;">
+				<p><strong><?php esc_html_e( 'How it works:', 'wp-watermark-pro' ); ?></strong>
+				<?php esc_html_e( 'Watermarking is triggered when a product\'s featured image or gallery is saved in the product editor. The global "Skip already-watermarked" rule applies, so saving a product multiple times won\'t double-watermark.', 'wp-watermark-pro' ); ?></p>
+			</div>
+
+			<?php submit_button( __( 'Save WooCommerce Settings', 'wp-watermark-pro' ) ); ?>
+		</form>
+		<?php
+	}
+
+	public function save_woocommerce_settings(): void {
+		check_admin_referer( 'wpwm_save_woocommerce', 'wpwm_woocommerce_nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( -1 );
+		}
+
+		$s = WP_Watermark_Pro::get_settings();
+		$s['woocommerce'] = [
+			'enabled'          => ! empty( $_POST['wc_enabled'] ),
+			'preset_id'        => sanitize_key( $_POST['wc_preset_id'] ?? '' ),
+			'apply_to_gallery' => ! empty( $_POST['wc_gallery'] ),
+		];
+		WP_Watermark_Pro::save_settings( $s );
+
+		wp_redirect( add_query_arg( [ 'page' => 'wp-watermark-pro', 'tab' => 'woocommerce', 'updated' => '1' ], admin_url( 'upload.php' ) ) );
+		exit;
+	}
+
+	// ── Regenerate preset AJAX ─────────────────────────────────────────────────
+
+	public function ajax_get_preset_usage(): void {
+		check_ajax_referer( 'wpwm_nonce', 'nonce' );
+		if ( ! current_user_can( 'upload_files' ) ) {
+			wp_send_json_error( 'Permission denied.' );
+		}
+
+		$preset_id = sanitize_key( $_POST['preset_id'] ?? '' );
+		if ( ! $preset_id ) {
+			wp_send_json_error( 'No preset ID.' );
+		}
+
+		$q = new WP_Query( [
+			'post_type'      => 'attachment',
+			'post_status'    => 'inherit',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'meta_query'     => [ [ 'key' => '_wpwm_preset', 'value' => $preset_id ] ],
+		] );
+
+		$processor    = new WP_Watermark_Processor();
+		$with_backup  = 0;
+		foreach ( $q->posts as $id ) {
+			$f = get_attached_file( $id );
+			if ( $f && file_exists( $processor->get_backup_path( $f ) ) ) {
+				$with_backup++;
+			}
+		}
+
+		wp_send_json_success( [
+			'total'       => $q->found_posts,
+			'with_backup' => $with_backup,
+			'ids'         => $q->posts,
+		] );
+	}
+
+	public function ajax_regenerate_batch(): void {
+		check_ajax_referer( 'wpwm_nonce', 'nonce' );
+		if ( ! current_user_can( 'upload_files' ) ) {
+			wp_send_json_error( 'Permission denied.' );
+		}
+
+		$ids       = array_map( 'intval', (array) ( $_POST['attachment_ids'] ?? [] ) );
+		$preset_id = sanitize_key( $_POST['preset_id'] ?? '' );
+		$processor = new WP_Watermark_Processor();
+		$results   = [ 'success' => [], 'failed' => [], 'skipped' => [] ];
+
+		foreach ( $ids as $id ) {
+			$file   = get_attached_file( $id );
+			$backup = $file ? $processor->get_backup_path( $file ) : '';
+
+			if ( $backup && file_exists( $backup ) ) {
+				// Restore original first so we don't watermark an already-watermarked image
+				$restore = $processor->restore_original( $id );
+				if ( is_wp_error( $restore ) ) {
+					$results['failed'][] = [ 'id' => $id, 'title' => get_the_title( $id ), 'message' => $restore->get_error_message() ];
+					continue;
+				}
+			} else {
+				// No backup — skip to avoid stacking watermarks
+				$results['skipped'][] = [ 'id' => $id, 'title' => get_the_title( $id ), 'message' => 'No backup found, skipped to avoid double-watermark.' ];
+				continue;
+			}
+
+			$r = $processor->apply_watermark( $id, $preset_id );
+			if ( is_wp_error( $r ) ) {
+				$results['failed'][]  = [ 'id' => $id, 'title' => get_the_title( $id ), 'message' => $r->get_error_message() ];
+			} else {
+				$results['success'][] = [ 'id' => $id, 'title' => get_the_title( $id ) ];
+			}
+		}
+
+		wp_send_json_success( $results );
 	}
 
 	public function save_protection_settings(): void {
