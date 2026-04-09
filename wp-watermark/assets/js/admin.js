@@ -595,8 +595,10 @@
 
         var type    = $('input[name="wpwm_type"]:checked').val() || 'text';
         var pos     = $('#wpwm-f-position').val()              || 'bottom-right';
-        var padding = parseInt($('#wpwm-f-padding').val(), 10) || 0;
-        var opacity = (parseInt($('#wpwm-f-opacity').val(), 10) || 70) / 100;
+        var paddingRaw = parseInt($('#wpwm-f-padding').val(), 10);
+        var padding    = isNaN(paddingRaw) ? 0 : paddingRaw;
+        var opacityRaw = parseInt($('#wpwm-f-opacity').val(), 10);
+        var opacity    = (isNaN(opacityRaw) ? 70 : opacityRaw) / 100;
 
         // Canvas represents a 1200 × 750 px image
         var scaleX = W / 1200;
