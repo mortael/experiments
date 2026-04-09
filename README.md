@@ -1,46 +1,50 @@
-# XSD Editor
+# WP Watermark Pro
 
-A web-based XSD (XML Schema Definition) editor with a tree view interface, similar to XMLSpy.
+A WordPress plugin that adds text or logo watermarks to images, with batch processing, backup/restore, and image-protection features.
 
 ## Features
-- **Tree View Structure**: Visual hierarchy of XSD elements
-- **Quick Enable/Disable**: Toggle elements and sections on/off
-- **Cardinality Editing**: Easy modification of minOccurs and maxOccurs
-- **Format/Type Editing**: Set data types and formats for elements
-- **Import Support**: Import external XSD files via xs:import and xs:include
-- **File Management**: Load, edit, and save XSD files
-- **Visual Indicators**: Icons showing element types, cardinality, and status
 
-## Getting Started
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Run the dev server:
-   ```bash
-   npm run dev
-   ```
-3. Build for production:
-   ```bash
-   npm run build
-   npm run preview
-   ```
+- **Text watermarks** – configurable font size, colour, opacity, rotation, shadow, and position
+- **Logo/image watermarks** – PNG with transparency recommended; scales proportionally
+- **Presets** – save multiple named watermark configurations and switch between them
+- **Live preview** – see how the watermark will look before saving a preset
+- **Auto-watermark on upload** – automatically apply the default preset to every new image
+- **Batch apply** – apply or re-apply a preset to all existing media-library images at once
+- **Backup & restore** – keeps an original copy so you can revert at any time
+- **Conditional rules** – skip already-watermarked images, enforce minimum dimensions, exclude file types
+- **EXIF stripping** – re-encodes JPEGs via GD to remove GPS location and device metadata
+- **Hotlink protection** – writes Apache `mod_rewrite` rules to block external image embedding
+- **Frontend image protection** – blocks right-click, drag, keyboard shortcuts, and DevTools access
+- **WooCommerce integration** – auto-watermark product featured images and gallery images
 
-## Usage
-1. **Load XSD File**: Click "Load XSD File" to upload an existing XSD file, or start with the default schema
-2. **Navigate Tree**: Expand/collapse elements in the tree view
-3. **Edit Elements**:
-   - Click on any element to select and edit it
-   - Toggle enabled/disabled using the checkbox
-   - Modify cardinality (min/max occurs)
-   - Change element type and format
-4. **Manage Sections**: Enable/disable entire sections using section checkboxes
-5. **Import Schemas**: Add xs:import or xs:include statements to reference external schemas
-6. **Export**: Download the modified XSD file
+## Requirements
 
-## Note on Branch Organization
-This repository contains multiple experimental projects, each in a separate branch:
-- `main`: Current active project (XSD Editor)
-- `midi-generator`: MIDI Pattern Generator project
+- WordPress 5.8+
+- PHP 7.4+
+- PHP `gd` extension
 
-To switch between projects, use: `git checkout <branch-name>`
+## Installation
+
+1. Copy the `wp-watermark` folder to `wp-content/plugins/`.
+2. Activate the plugin in **Plugins → Installed Plugins**.
+3. Navigate to **Media → Watermark** to configure presets and settings.
+
+## Directory structure
+
+```
+wp-watermark/
+├── wp-watermark.php                       # Plugin bootstrap
+├── assets/
+│   ├── css/
+│   │   ├── admin.css                      # Admin UI styles
+│   │   └── protection.css                 # Frontend protection styles
+│   └── js/
+│       ├── admin.js                       # Admin UI scripts
+│       └── protection.js                  # Frontend protection scripts
+└── includes/
+    ├── class-watermark-admin.php          # Admin menu, settings pages, AJAX handlers
+    ├── class-watermark-processor.php      # GD-based image watermarking engine
+    ├── class-watermark-protection.php     # Frontend protection layer
+    ├── class-watermark-hotlink.php        # Apache .htaccess hotlink rules
+    └── class-watermark-woocommerce.php    # WooCommerce product-image integration
+```
