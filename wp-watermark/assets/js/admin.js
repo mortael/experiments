@@ -367,6 +367,47 @@
         });
     }
 
+    // ── Backup management (Backups tab) ───────────────────────────────────────
+
+    function bindBackupActions() {
+        // Restore original
+        $(document).on('click', '.wpwm-restore-btn', function () {
+            if (!confirm(wpwm.strings.confirm_restore)) return;
+            var $btn  = $(this);
+            var id    = $btn.data('id');
+            var $row  = $('#wpwm-backup-row-' + id);
+            var $status = $row.find('.wpwm-row-status');
+
+            $btn.prop('disabled', true).text('Restoring…');
+            ajax('wpwm_restore_original', { attachment_id: id }, function () {
+                $status.text('Restored!').addClass('ok');
+                $row.find('.wpwm-restore-btn, .wpwm-delete-backup-btn').remove();
+            }, function (err) {
+                $status.text(err).addClass('fail');
+                $btn.prop('disabled', false).text('Restore Original');
+            });
+        });
+
+        // Delete backup file only
+        $(document).on('click', '.wpwm-delete-backup-btn', function () {
+            if (!confirm('Delete the backup file? The watermarked image will remain.')) return;
+            var $btn  = $(this);
+            var id    = $btn.data('id');
+            var $row  = $('#wpwm-backup-row-' + id);
+            var $status = $row.find('.wpwm-row-status');
+
+            $btn.prop('disabled', true).text('Deleting…');
+            ajax('wpwm_delete_backup', { attachment_id: id }, function () {
+                $status.text('Backup deleted').addClass('ok');
+                $row.find('.wpwm-restore-btn, .wpwm-delete-backup-btn').remove();
+                $row.find('td:nth-child(4)').html('<span class="wpwm-badge">No backup</span>');
+            }, function (err) {
+                $status.text(err).addClass('fail');
+                $btn.prop('disabled', false).text('Delete Backup');
+            });
+        });
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
 
     $(function () {
@@ -379,6 +420,7 @@
         bindLogoUploader();
         bindPresetEditor();
         bindBatchApply();
+        bindBackupActions();
 
         // Show success notice after settings save
         if (window.location.search.indexOf('updated=1') !== -1) {

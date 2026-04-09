@@ -1,0 +1,78 @@
+/**
+ * WP Watermark Pro — Frontend Image Protection Styles
+ */
+
+/* Prevent browser-native drag & text-selection on images */
+img {
+	-webkit-user-select: none;
+	        user-select: none;
+	-webkit-user-drag: none;
+	        user-drag: none;
+	-webkit-touch-callout: none;
+}
+
+/* Wrapper keeps position context without altering layout */
+.wpwm-img-wrap {
+	position: relative;
+	display: inline-block;
+	line-height: 0;
+	/* Inherit parent display behaviour */
+}
+
+/* Block-level images (most WordPress themes) */
+.wp-block-image .wpwm-img-wrap,
+p > .wpwm-img-wrap,
+figure .wpwm-img-wrap {
+	display: block;
+}
+
+.wpwm-img-wrap img {
+	display: block;
+	pointer-events: none; /* clicks still reach the shield, not the image */
+}
+
+/* Transparent shield sits on top of the image and intercepts pointer events */
+.wpwm-img-shield {
+	position: absolute;
+	inset: 0;           /* top/right/bottom/left: 0 */
+	z-index: 1;
+	background: transparent;
+	cursor: default;
+	-webkit-user-select: none;
+	        user-select: none;
+}
+
+/* DevTools detected — blur effect */
+.wpwm-devtools-blur {
+	filter: blur(12px) !important;
+	transition: filter 0.4s ease;
+}
+
+/* DevTools detected — hide effect */
+.wpwm-devtools-hide {
+	visibility: hidden !important;
+}
+
+/* Toast notification */
+#wpwm-toast {
+	position: fixed;
+	bottom: 24px;
+	left: 50%;
+	transform: translateX(-50%) translateY(8px);
+	background: rgba(0, 0, 0, 0.78);
+	color: #fff;
+	padding: 9px 20px;
+	border-radius: 5px;
+	font-size: 14px;
+	line-height: 1.4;
+	z-index: 2147483647; /* max z-index */
+	pointer-events: none;
+	white-space: nowrap;
+	opacity: 0;
+	transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#wpwm-toast.wpwm-toast-visible {
+	opacity: 1;
+	transform: translateX(-50%) translateY(0);
+}

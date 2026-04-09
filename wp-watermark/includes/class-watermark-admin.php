@@ -18,7 +18,8 @@ class WP_Watermark_Admin {
 	private function __construct() {
 		add_action( 'admin_menu',                [ $this, 'register_menu' ] );
 		add_action( 'admin_enqueue_scripts',     [ $this, 'enqueue_assets' ] );
-		add_action( 'admin_post_wpwm_settings',  [ $this, 'save_general_settings' ] );
+		add_action( 'admin_post_wpwm_settings',   [ $this, 'save_general_settings' ] );
+		add_action( 'admin_post_wpwm_protection', [ $this, 'save_protection_settings' ] );
 
 		// AJAX
 		add_action( 'wp_ajax_wpwm_save_preset',       [ $this, 'ajax_save_preset' ] );
@@ -26,6 +27,7 @@ class WP_Watermark_Admin {
 		add_action( 'wp_ajax_wpwm_apply_single',      [ $this, 'ajax_apply_single' ] );
 		add_action( 'wp_ajax_wpwm_apply_batch',       [ $this, 'ajax_apply_batch' ] );
 		add_action( 'wp_ajax_wpwm_restore_original',  [ $this, 'ajax_restore_original' ] );
+		add_action( 'wp_ajax_wpwm_delete_backup',     [ $this, 'ajax_delete_backup' ] );
 		add_action( 'wp_ajax_wpwm_get_image_ids',     [ $this, 'ajax_get_image_ids' ] );
 
 		// Media library
@@ -114,9 +116,11 @@ class WP_Watermark_Admin {
 			<nav class="nav-tab-wrapper">
 				<?php
 				$tabs = [
-					'general' => __( 'General Settings', 'wp-watermark-pro' ),
-					'presets' => __( 'Manage Presets', 'wp-watermark-pro' ),
-					'apply'   => __( 'Batch Apply', 'wp-watermark-pro' ),
+					'general'    => __( 'General Settings', 'wp-watermark-pro' ),
+					'presets'    => __( 'Manage Presets', 'wp-watermark-pro' ),
+					'apply'      => __( 'Batch Apply', 'wp-watermark-pro' ),
+					'backups'    => __( 'Backups', 'wp-watermark-pro' ),
+					'protection' => __( 'Image Protection', 'wp-watermark-pro' ),
 				];
 				foreach ( $tabs as $slug => $label ) {
 					$url   = add_query_arg( [ 'page' => 'wp-watermark-pro', 'tab' => $slug ], admin_url( 'upload.php' ) );
@@ -134,6 +138,10 @@ class WP_Watermark_Admin {
 					$this->render_presets_tab();
 				} elseif ( $active_tab === 'apply' ) {
 					$this->render_apply_tab();
+				} elseif ( $active_tab === 'backups' ) {
+					$this->render_backups_tab();
+				} elseif ( $active_tab === 'protection' ) {
+					$this->render_protection_tab();
 				}
 				?>
 			</div>
@@ -706,6 +714,305 @@ class WP_Watermark_Admin {
 		}
 
 		wp_redirect( add_query_arg( $notice, 1, wp_get_referer() ?: admin_url( 'upload.php' ) ) );
+		exit;
+	}
+
+	// ── Backups tab ───────────────────────────────────────────────────────────
+
+	private function render_backups_tab(): void {
+		$paged     = max( 1, (int) ( $_GET['bpaged'] ?? 1 ) );
+		$per_page  = 20;
+		$processor = new WP_Watermark_Processor();
+		$presets   = WP_Watermark_Pro::get_presets();
+
+		$query = new WP_Query( [
+			'post_type'      => 'attachment',
+			'post_mime_type' => 'image',
+			'post_status'    => 'inherit',
+			'posts_per_page' => $per_page,
+			'paged'          => $paged,
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
+			'meta_query'     => [ [ 'key' => '_wpwm_watermarked', 'compare' => 'EXISTS' ] ],
+		] );
+
+		$total        = $query->found_posts;
+		$total_pages  = (int) ceil( $total / $per_page );
+
+		// Count backup coverage in this page
+		$with_backup    = 0;
+		$without_backup = 0;
+		foreach ( $query->posts as $pid ) {
+			$f = get_attached_file( $pid );
+			if ( $f && file_exists( $processor->get_backup_path( $f ) ) ) {
+				$with_backup++;
+			} else {
+				$without_backup++;
+			}
+		}
+		?>
+		<div class="wpwm-card">
+			<div class="wpwm-backup-stats">
+				<span class="wpwm-stat"><strong><?php echo esc_html( $total ); ?></strong> <?php esc_html_e( 'images watermarked', 'wp-watermark-pro' ); ?></span>
+				<span class="wpwm-stat wpwm-stat-ok"><strong><?php echo esc_html( $with_backup ); ?></strong> <?php esc_html_e( 'with backup (this page)', 'wp-watermark-pro' ); ?></span>
+				<?php if ( $without_backup > 0 ) : ?>
+					<span class="wpwm-stat wpwm-stat-warn"><strong><?php echo esc_html( $without_backup ); ?></strong> <?php esc_html_e( 'missing backup', 'wp-watermark-pro' ); ?></span>
+				<?php endif; ?>
+			</div>
+
+			<?php if ( $total === 0 ) : ?>
+				<p><?php esc_html_e( 'No watermarked images found yet.', 'wp-watermark-pro' ); ?></p>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped wpwm-backup-table">
+					<thead>
+						<tr>
+							<th style="width:56px"><?php esc_html_e( 'Image', 'wp-watermark-pro' ); ?></th>
+							<th><?php esc_html_e( 'Title / File', 'wp-watermark-pro' ); ?></th>
+							<th style="width:140px"><?php esc_html_e( 'Preset Used', 'wp-watermark-pro' ); ?></th>
+							<th style="width:160px"><?php esc_html_e( 'Backup', 'wp-watermark-pro' ); ?></th>
+							<th style="width:220px"><?php esc_html_e( 'Actions', 'wp-watermark-pro' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $query->posts as $pid ) :
+							$file         = get_attached_file( $pid );
+							$backup_path  = $file ? $processor->get_backup_path( $file ) : '';
+							$has_backup   = $backup_path && file_exists( $backup_path );
+							$backup_size  = $has_backup ? size_format( filesize( $backup_path ) ) : '—';
+							$backup_ts    = get_post_meta( $pid, '_wpwm_backup_date', true );
+							$preset_id    = get_post_meta( $pid, '_wpwm_preset',      true );
+							$preset_name  = $presets[ $preset_id ]['name'] ?? esc_html__( '(deleted)', 'wp-watermark-pro' );
+						?>
+							<tr id="wpwm-backup-row-<?php echo esc_attr( $pid ); ?>">
+								<td><?php echo wp_get_attachment_image( $pid, [ 48, 48 ] ); ?></td>
+								<td>
+									<strong><?php echo esc_html( get_the_title( $pid ) ); ?></strong><br>
+									<span class="description"><?php echo esc_html( basename( $file ?? '' ) ); ?></span>
+								</td>
+								<td><?php echo esc_html( $preset_name ); ?></td>
+								<td>
+									<?php if ( $has_backup ) : ?>
+										<span class="wpwm-badge wpwm-badge-image">&#10003; <?php echo esc_html( $backup_size ); ?></span>
+										<?php if ( $backup_ts ) : ?>
+											<br><small><?php echo esc_html( human_time_diff( (int) $backup_ts ) ); ?> ago</small>
+										<?php endif; ?>
+									<?php else : ?>
+										<span class="wpwm-badge"><?php esc_html_e( 'No backup', 'wp-watermark-pro' ); ?></span>
+									<?php endif; ?>
+								</td>
+								<td>
+									<?php if ( $has_backup ) : ?>
+										<button type="button" class="button button-small wpwm-restore-btn"
+											data-id="<?php echo esc_attr( $pid ); ?>">
+											<?php esc_html_e( 'Restore Original', 'wp-watermark-pro' ); ?>
+										</button>
+										<button type="button" class="button button-small wpwm-delete-backup-btn"
+											data-id="<?php echo esc_attr( $pid ); ?>">
+											<?php esc_html_e( 'Delete Backup', 'wp-watermark-pro' ); ?>
+										</button>
+									<?php else : ?>
+										<span class="description"><?php esc_html_e( 'No backup available', 'wp-watermark-pro' ); ?></span>
+									<?php endif; ?>
+									<span class="wpwm-row-status"></span>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+
+				<?php if ( $total_pages > 1 ) :
+					$base = add_query_arg( [ 'page' => 'wp-watermark-pro', 'tab' => 'backups' ], admin_url( 'upload.php' ) );
+				?>
+					<div class="tablenav bottom"><div class="tablenav-pages wpwm-pagination">
+						<?php for ( $i = 1; $i <= $total_pages; $i++ ) :
+							$cls = $i === $paged ? 'button button-primary' : 'button';
+						?>
+							<a href="<?php echo esc_url( add_query_arg( 'bpaged', $i, $base ) ); ?>"
+								class="<?php echo esc_attr( $cls ); ?>">
+								<?php echo esc_html( $i ); ?>
+							</a>
+						<?php endfor; ?>
+					</div></div>
+				<?php endif; ?>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	public function ajax_delete_backup(): void {
+		check_ajax_referer( 'wpwm_nonce', 'nonce' );
+		if ( ! current_user_can( 'upload_files' ) ) {
+			wp_send_json_error( 'Permission denied.' );
+		}
+
+		$id        = (int) ( $_POST['attachment_id'] ?? 0 );
+		$file      = get_attached_file( $id );
+		$processor = new WP_Watermark_Processor();
+		$backup    = $processor->get_backup_path( $file );
+
+		if ( ! $backup || ! file_exists( $backup ) ) {
+			wp_send_json_error( 'Backup file not found.' );
+		}
+
+		if ( ! wp_delete_file_from_directory( $backup, dirname( $file ) ) ) {
+			// Fallback to direct unlink if WP helper fails (different dir structure edge case)
+			@unlink( $backup );
+		}
+
+		delete_post_meta( $id, '_wpwm_backup_date' );
+		delete_post_meta( $id, '_wpwm_backup_size' );
+
+		wp_send_json_success( [ 'message' => 'Backup deleted.' ] );
+	}
+
+	// ── Image Protection tab ──────────────────────────────────────────────────
+
+	private function render_protection_tab(): void {
+		$s   = WP_Watermark_Pro::get_settings();
+		$cfg = $s['protection'] ?? [];
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'wpwm_save_protection', 'wpwm_protection_nonce' ); ?>
+			<input type="hidden" name="action" value="wpwm_protection">
+
+			<div class="wpwm-card">
+				<h3><?php esc_html_e( 'Basic Protection', 'wp-watermark-pro' ); ?></h3>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><?php esc_html_e( 'Enable protection', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="enabled" value="1" <?php checked( ! empty( $cfg['enabled'] ) ); ?>>
+								<?php esc_html_e( 'Activate frontend image protection on this site', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Block right-click', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="rightclick" value="1" <?php checked( ! empty( $cfg['rightclick'] ) ); ?>>
+								<?php esc_html_e( 'Prevent context menu (Save Image As) on images', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Block drag &amp; drop', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="drag" value="1" <?php checked( ! empty( $cfg['drag'] ) ); ?>>
+								<?php esc_html_e( 'Prevent images from being dragged out of the browser', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Block keyboard shortcuts', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="keyboard" value="1" <?php checked( ! empty( $cfg['keyboard'] ) ); ?>>
+								<?php esc_html_e( 'Disable F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S', 'wp-watermark-pro' ); ?>
+							</label>
+							<p class="description"><?php esc_html_e( 'Deters casual users; experienced developers can bypass this.', 'wp-watermark-pro' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Transparent overlay', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="wrap_images" value="1" <?php checked( ! empty( $cfg['wrap_images'] ) ); ?>>
+								<?php esc_html_e( 'Wrap images in a transparent shield element that intercepts pointer events', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="wpwm-card">
+				<h3><?php esc_html_e( 'Developer Tools Detection', 'wp-watermark-pro' ); ?></h3>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><?php esc_html_e( 'Detect DevTools', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="devtools" value="1" <?php checked( ! empty( $cfg['devtools'] ) ); ?>>
+								<?php esc_html_e( 'Use window-size heuristic to detect browser DevTools panel', 'wp-watermark-pro' ); ?>
+							</label>
+							<p class="description"><?php esc_html_e( 'Checks every second if DevTools is open (side/bottom panel increases outer window size vs inner viewport).', 'wp-watermark-pro' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'Action when detected', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<?php $action = $cfg['devtools_action'] ?? 'blur'; ?>
+							<label><input type="radio" name="devtools_action" value="blur" <?php checked( $action, 'blur' ); ?>>
+								<?php esc_html_e( 'Blur images', 'wp-watermark-pro' ); ?>
+							</label>&nbsp;&nbsp;
+							<label><input type="radio" name="devtools_action" value="hide" <?php checked( $action, 'hide' ); ?>>
+								<?php esc_html_e( 'Hide images', 'wp-watermark-pro' ); ?>
+							</label>&nbsp;&nbsp;
+							<label><input type="radio" name="devtools_action" value="warn" <?php checked( $action, 'warn' ); ?>>
+								<?php esc_html_e( 'Toast only', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="wpwm-card">
+				<h3><?php esc_html_e( 'Advanced', 'wp-watermark-pro' ); ?></h3>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th><?php esc_html_e( 'Protection message', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<input type="text" name="message" class="regular-text"
+								value="<?php echo esc_attr( $cfg['message'] ?? 'Images on this site are protected.' ); ?>">
+							<p class="description"><?php esc_html_e( 'Shown in a toast when a blocked action is attempted.', 'wp-watermark-pro' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'No-image robot meta', 'wp-watermark-pro' ); ?></th>
+						<td>
+							<label>
+								<input type="checkbox" name="no_image_index" value="1" <?php checked( ! empty( $cfg['no_image_index'] ) ); ?>>
+								<?php esc_html_e( 'Add <code>&lt;meta name="robots" content="noimageindex"&gt;</code> to discourage search engines from indexing your images.', 'wp-watermark-pro' ); ?>
+							</label>
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="wpwm-card" style="background:#fff8e1;border-color:#ffe082;">
+				<p><strong><?php esc_html_e( 'Important notice:', 'wp-watermark-pro' ); ?></strong>
+				<?php esc_html_e( 'Frontend protection is a deterrent, not a guarantee. Anyone with technical knowledge can still download images via the browser network tab, screenshots, or cached URLs. Physical watermarking (applied to the image file itself) is the only reliable protection.', 'wp-watermark-pro' ); ?></p>
+			</div>
+
+			<?php submit_button( __( 'Save Protection Settings', 'wp-watermark-pro' ) ); ?>
+		</form>
+		<?php
+	}
+
+	public function save_protection_settings(): void {
+		check_admin_referer( 'wpwm_save_protection', 'wpwm_protection_nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( -1 );
+		}
+
+		$s = WP_Watermark_Pro::get_settings();
+		$s['protection'] = [
+			'enabled'         => ! empty( $_POST['enabled'] ),
+			'rightclick'      => ! empty( $_POST['rightclick'] ),
+			'drag'            => ! empty( $_POST['drag'] ),
+			'keyboard'        => ! empty( $_POST['keyboard'] ),
+			'devtools'        => ! empty( $_POST['devtools'] ),
+			'devtools_action' => in_array( $_POST['devtools_action'] ?? '', [ 'blur', 'hide', 'warn' ], true )
+				? $_POST['devtools_action'] : 'blur',
+			'wrap_images'     => ! empty( $_POST['wrap_images'] ),
+			'message'         => sanitize_text_field( $_POST['message'] ?? '' ),
+			'no_image_index'  => ! empty( $_POST['no_image_index'] ),
+		];
+		WP_Watermark_Pro::save_settings( $s );
+
+		wp_redirect( add_query_arg( [ 'page' => 'wp-watermark-pro', 'tab' => 'protection', 'updated' => '1' ], admin_url( 'upload.php' ) ) );
 		exit;
 	}
 }

@@ -25,6 +25,7 @@ if ( ! extension_loaded( 'gd' ) ) {
 
 require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-processor.php';
 require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-admin.php';
+require_once WPWM_PLUGIN_DIR . 'includes/class-watermark-protection.php';
 
 final class WP_Watermark_Pro {
 
@@ -54,6 +55,10 @@ final class WP_Watermark_Pro {
 		$settings = self::get_settings();
 		if ( ! empty( $settings['auto_watermark'] ) && ! empty( $settings['default_preset'] ) ) {
 			add_filter( 'wp_generate_attachment_metadata', [ $this, 'auto_watermark_on_upload' ], 20, 2 );
+		}
+
+		if ( ! is_admin() && ! empty( $settings['protection']['enabled'] ) ) {
+			WP_Watermark_Protection::get_instance()->init();
 		}
 	}
 
@@ -109,6 +114,17 @@ final class WP_Watermark_Pro {
 			'auto_watermark'   => false,
 			'default_preset'   => 'preset_1',
 			'backup_originals' => true,
+			'protection'       => [
+				'enabled'         => false,
+				'rightclick'      => true,
+				'drag'            => true,
+				'keyboard'        => true,
+				'devtools'        => false,
+				'devtools_action' => 'blur',
+				'wrap_images'     => true,
+				'message'         => 'Images on this site are protected.',
+				'no_image_index'  => false,
+			],
 			'presets'          => [
 				'preset_1' => [
 					'id'            => 'preset_1',

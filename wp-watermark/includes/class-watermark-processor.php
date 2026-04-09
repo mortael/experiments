@@ -40,6 +40,11 @@ class WP_Watermark_Processor {
 			if ( is_wp_error( $backup ) ) {
 				return $backup;
 			}
+			// Store backup metadata only on the first watermark (don't overwrite original date).
+			if ( ! get_post_meta( $attachment_id, '_wpwm_backup_date', true ) ) {
+				update_post_meta( $attachment_id, '_wpwm_backup_date', time() );
+				update_post_meta( $attachment_id, '_wpwm_backup_size', filesize( $backup ) );
+			}
 		}
 
 		@ini_set( 'memory_limit', '256M' ); // large images need headroom

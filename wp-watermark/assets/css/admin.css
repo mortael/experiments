@@ -163,3 +163,35 @@ input[type="range"] {
 /* Utility */
 .button-link-delete { color: #b32d2e !important; }
 .button-link-delete:hover { color: #a00 !important; }
+
+/* ── Backups tab ────────────────────────────────────────────────────────── */
+
+.wpwm-backup-stats {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f1;
+}
+.wpwm-stat {
+    font-size: 13px;
+    color: #50575e;
+}
+.wpwm-stat strong { font-size: 18px; color: #1d2327; display: block; }
+.wpwm-stat-ok strong  { color: #2e7d32; }
+.wpwm-stat-warn strong { color: #c62828; }
+
+.wpwm-backup-table td { vertical-align: middle; }
+.wpwm-backup-table img { display: block; width: 48px; height: 48px; object-fit: cover; border-radius: 3px; }
+
+.wpwm-row-status {
+    margin-left: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.wpwm-row-status.ok   { color: #2e7d32; }
+.wpwm-row-status.fail { color: #c62828; }
+
+.wpwm-pagination { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 0; }
+
