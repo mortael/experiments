@@ -631,7 +631,16 @@
             return;
         }
         var img    = new Image();
-        img.crossOrigin = 'anonymous';
+
+        // Only enable anonymous CORS for external images on a different host
+        if (/^https?:\/\//i.test(url)) {
+            var link = document.createElement('a');
+            link.href = url;
+            if (link.host && link.host !== window.location.host) {
+                img.crossOrigin = 'anonymous';
+            }
+        }
+
         img.onload  = function () { _previewLogoImg = img; _previewLogoUrl = url; renderPreview(); };
         img.onerror = function () { _previewLogoImg = null; renderPreview(); };
         img.src = url;
