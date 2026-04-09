@@ -352,7 +352,11 @@ class WP_Watermark_Admin {
 			<div class="wpwm-preset-card-header">
 				<strong><?php echo esc_html( $p['name'] ); ?></strong>
 				<span class="wpwm-badge wpwm-badge-<?php echo esc_attr( $p['type'] ); ?>"><?php echo esc_html( $type_label ); ?></span>
+				<?php if ( ! empty( $p['tile'] ) ) : ?>
+				<span class="wpwm-badge"><?php esc_html_e( 'Tiled', 'wp-watermark-pro' ); ?></span>
+			<?php else : ?>
 				<span class="wpwm-badge"><?php echo esc_html( ucwords( str_replace( '-', ' ', $p['position'] ?? 'bottom-right' ) ) ); ?></span>
+			<?php endif; ?>
 				<span class="wpwm-badge"><?php echo esc_html( ( $p['opacity'] ?? 70 ) . '% opacity' ); ?></span>
 			</div>
 			<div class="wpwm-preset-card-actions">
@@ -475,31 +479,62 @@ class WP_Watermark_Admin {
 						<span id="wpwm-logo-width-val"><?php echo esc_html( $p['logo_width'] ?? 20 ); ?></span>%
 					</td>
 				</tr>
+				<tr>
+					<th><?php esc_html_e( 'Rotation (°)', 'wp-watermark-pro' ); ?></th>
+					<td>
+						<input type="number" id="wpwm-f-img-rotation" class="small-text" value="<?php echo esc_attr( $p['rotation'] ?? 0 ); ?>" min="-360" max="360">
+						<p class="description"><?php esc_html_e( 'Degrees to rotate the logo (e.g. 45 for diagonal).', 'wp-watermark-pro' ); ?></p>
+					</td>
+				</tr>
 			</table>
 		</div>
 
 		<!-- Shared fields -->
+		<?php
+		$is_tiled = ! empty( $p['tile'] );
+		?>
 		<table class="form-table" role="presentation">
 			<tr>
-				<th><?php esc_html_e( 'Position', 'wp-watermark-pro' ); ?></th>
+				<th><?php esc_html_e( 'Tile / Repeat', 'wp-watermark-pro' ); ?></th>
 				<td>
-					<div class="wpwm-position-grid">
-						<?php foreach ( $positions as $pos_key => $pos_label ) : ?>
-							<button type="button"
-								class="wpwm-pos-btn <?php echo $pos_key === $current_pos ? 'active' : ''; ?>"
-								data-pos="<?php echo esc_attr( $pos_key ); ?>"
-								title="<?php echo esc_attr( $pos_label ); ?>">
-							</button>
-						<?php endforeach; ?>
-					</div>
-					<input type="hidden" id="wpwm-f-position" value="<?php echo esc_attr( $current_pos ); ?>">
-					<p class="description wpwm-pos-label"><?php echo esc_html( $positions[ $current_pos ] ); ?></p>
+					<label>
+						<input type="checkbox" id="wpwm-f-tile" <?php checked( $is_tiled ); ?>>
+						<?php esc_html_e( 'Repeat watermark across the entire image', 'wp-watermark-pro' ); ?>
+					</label>
 				</td>
 			</tr>
-			<tr>
-				<th><?php esc_html_e( 'Edge padding (px)', 'wp-watermark-pro' ); ?></th>
-				<td><input type="number" id="wpwm-f-padding" class="small-text" value="<?php echo esc_attr( $p['padding'] ?? 20 ); ?>" min="0" max="500"></td>
-			</tr>
+			<tbody id="wpwm-tile-gap-rows" <?php echo $is_tiled ? '' : 'style="display:none"'; ?>>
+				<tr>
+					<th><?php esc_html_e( 'Horizontal gap (px)', 'wp-watermark-pro' ); ?></th>
+					<td><input type="number" id="wpwm-f-tile-gap-x" class="small-text" value="<?php echo esc_attr( $p['tile_gap_x'] ?? 40 ); ?>" min="0" max="2000"></td>
+				</tr>
+				<tr>
+					<th><?php esc_html_e( 'Vertical gap (px)', 'wp-watermark-pro' ); ?></th>
+					<td><input type="number" id="wpwm-f-tile-gap-y" class="small-text" value="<?php echo esc_attr( $p['tile_gap_y'] ?? 40 ); ?>" min="0" max="2000"></td>
+				</tr>
+			</tbody>
+			<tbody id="wpwm-position-rows" <?php echo $is_tiled ? 'style="display:none"' : ''; ?>>
+				<tr>
+					<th><?php esc_html_e( 'Position', 'wp-watermark-pro' ); ?></th>
+					<td>
+						<div class="wpwm-position-grid">
+							<?php foreach ( $positions as $pos_key => $pos_label ) : ?>
+								<button type="button"
+									class="wpwm-pos-btn <?php echo $pos_key === $current_pos ? 'active' : ''; ?>"
+									data-pos="<?php echo esc_attr( $pos_key ); ?>"
+									title="<?php echo esc_attr( $pos_label ); ?>">
+								</button>
+							<?php endforeach; ?>
+						</div>
+						<input type="hidden" id="wpwm-f-position" value="<?php echo esc_attr( $current_pos ); ?>">
+						<p class="description wpwm-pos-label"><?php echo esc_html( $positions[ $current_pos ] ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th><?php esc_html_e( 'Edge padding (px)', 'wp-watermark-pro' ); ?></th>
+					<td><input type="number" id="wpwm-f-padding" class="small-text" value="<?php echo esc_attr( $p['padding'] ?? 20 ); ?>" min="0" max="500"></td>
+				</tr>
+			</tbody>
 			<tr>
 				<th><?php esc_html_e( 'Opacity (%)', 'wp-watermark-pro' ); ?></th>
 				<td>
@@ -607,13 +642,18 @@ class WP_Watermark_Admin {
 			$id = 'preset_' . uniqid();
 		}
 
+		$tile = ! empty( $_POST['tile'] );
+
 		$preset = [
-			'id'       => $id,
-			'name'     => sanitize_text_field( $_POST['name']     ?? '' ),
-			'type'     => in_array( $type, [ 'text', 'image' ], true ) ? $type : 'text',
-			'position' => sanitize_key( $_POST['position'] ?? 'bottom-right' ),
-			'padding'  => (int) ( $_POST['padding']  ?? 20 ),
-			'opacity'  => max( 0, min( 100, (int) ( $_POST['opacity'] ?? 70 ) ) ),
+			'id'         => $id,
+			'name'       => sanitize_text_field( $_POST['name']     ?? '' ),
+			'type'       => in_array( $type, [ 'text', 'image' ], true ) ? $type : 'text',
+			'tile'       => $tile,
+			'tile_gap_x' => max( 0, (int) ( $_POST['tile_gap_x'] ?? 40 ) ),
+			'tile_gap_y' => max( 0, (int) ( $_POST['tile_gap_y'] ?? 40 ) ),
+			'position'   => sanitize_key( $_POST['position'] ?? 'bottom-right' ),
+			'padding'    => (int) ( $_POST['padding']  ?? 20 ),
+			'opacity'    => max( 0, min( 100, (int) ( $_POST['opacity'] ?? 70 ) ) ),
 		];
 
 		if ( $preset['name'] === '' ) {
@@ -631,6 +671,7 @@ class WP_Watermark_Admin {
 		} else {
 			$preset['logo_id']    = (int) ( $_POST['logo_id']   ?? 0 );
 			$preset['logo_width'] = max( 1, min( 80, (int) ( $_POST['logo_width'] ?? 20 ) ) );
+			$preset['rotation']   = (float) ( $_POST['rotation'] ?? 0 );
 		}
 
 		WP_Watermark_Pro::save_preset( $preset );

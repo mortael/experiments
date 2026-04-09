@@ -79,9 +79,13 @@ class WP_Watermark_Processor {
 		[ $image, $type ] = $image_res;
 
 		if ( $preset['type'] === 'text' ) {
-			$result = $this->apply_text_watermark( $image, $preset );
+			$result = ! empty( $preset['tile'] )
+				? $this->apply_tiled_text_watermark( $image, $preset )
+				: $this->apply_text_watermark( $image, $preset );
 		} else {
-			$result = $this->apply_image_watermark( $image, $preset );
+			$result = ! empty( $preset['tile'] )
+				? $this->apply_tiled_image_watermark( $image, $preset )
+				: $this->apply_image_watermark( $image, $preset );
 		}
 
 		if ( is_wp_error( $result ) ) {
@@ -240,6 +244,19 @@ class WP_Watermark_Processor {
 		imagecopyresampled( $resized, $logo, 0, 0, 0, 0, $new_logo_w, $new_logo_h, $logo_orig_w, $logo_orig_h );
 		imagedestroy( $logo );
 
+		// Apply rotation if set
+		$rotation = (float) ( $preset['rotation'] ?? 0 );
+		if ( $rotation != 0.0 ) {
+			$bg      = imagecolorallocatealpha( $resized, 0, 0, 0, 127 );
+			$rotated = imagerotate( $resized, -$rotation, $bg );
+			imagedestroy( $resized );
+			imagealphablending( $rotated, false );
+			imagesavealpha( $rotated, true );
+			$resized    = $rotated;
+			$new_logo_w = imagesx( $resized );
+			$new_logo_h = imagesy( $resized );
+		}
+
 		$padding  = (int) ( $preset['padding']  ?? 15 );
 		$position = $preset['position']  ?? 'bottom-right';
 		$opacity  = $this->clamp( (int) ( $preset['opacity'] ?? 85 ), 0, 100 );
@@ -249,6 +266,138 @@ class WP_Watermark_Processor {
 		$this->merge_overlay( $image, $resized, $new_logo_w, $new_logo_h, $opacity, (int) $x, (int) $y );
 		imagedestroy( $resized );
 
+		return true;
+	}
+
+	/** Tile text watermark across the full image. */
+	private function apply_tiled_text_watermark( $image, array $preset ) {
+		$text          = $this->parse_placeholders( $preset['text'] ?? '© {year}' );
+		$font_size     = max( 6, (int) ( $preset['font_size']    ?? 24 ) );
+		$opacity       = $this->clamp( (int) ( $preset['opacity']      ?? 70 ), 0, 100 );
+		$font_color    = $preset['font_color']   ?? '#ffffff';
+		$shadow        = ! empty( $preset['shadow'] );
+		$shadow_color  = $preset['shadow_color']  ?? '#000000';
+		$shadow_offset = (int) ( $preset['shadow_offset'] ?? 2 );
+		$rotation      = (float) ( $preset['rotation']    ?? 0 );
+		$gap_x         = max( 0, (int) ( $preset['tile_gap_x'] ?? 40 ) );
+		$gap_y         = max( 0, (int) ( $preset['tile_gap_y'] ?? 40 ) );
+
+		$img_w   = imagesx( $image );
+		$img_h   = imagesy( $image );
+		$overlay = $this->create_transparent_overlay( $img_w, $img_h );
+
+		if ( $this->has_ttf_support() ) {
+			$bbox = imagettfbbox( $font_size, $rotation, $this->font_path, $text );
+			if ( ! $bbox ) {
+				return $this->apply_text_watermark_builtin( $image, $preset );
+			}
+			$text_w    = abs( $bbox[4] - $bbox[0] );
+			$text_h    = abs( $bbox[5] - $bbox[1] );
+			$descender = abs( $bbox[1] );
+			$step_x    = max( 1, $text_w + $gap_x );
+			$step_y    = max( 1, $text_h + $gap_y );
+
+			[ $r, $g, $b ] = $this->hex2rgb( $font_color );
+			$tc = imagecolorallocate( $overlay, $r, $g, $b );
+			$sc = null;
+			if ( $shadow ) {
+				[ $sr, $sg, $sb ] = $this->hex2rgb( $shadow_color );
+				$sc = imagecolorallocate( $overlay, $sr, $sg, $sb );
+			}
+
+			for ( $y = -$text_h; $y < $img_h + $text_h; $y += $step_y ) {
+				$base_y = (int) $y + $text_h - $descender;
+				for ( $x = -$text_w; $x < $img_w + $text_w; $x += $step_x ) {
+					if ( $shadow && $sc !== null ) {
+						imagettftext( $overlay, $font_size, $rotation, (int) $x + $shadow_offset, $base_y + $shadow_offset, $sc, $this->font_path, $text );
+					}
+					imagettftext( $overlay, $font_size, $rotation, (int) $x, $base_y, $tc, $this->font_path, $text );
+				}
+			}
+		} else {
+			$gd_font = 5;
+			$text_w  = strlen( $text ) * imagefontwidth( $gd_font );
+			$text_h  = imagefontheight( $gd_font );
+			$step_x  = max( 1, $text_w + $gap_x );
+			$step_y  = max( 1, $text_h + $gap_y );
+			[ $r, $g, $b ] = $this->hex2rgb( $font_color );
+			$tc = imagecolorallocate( $overlay, $r, $g, $b );
+			for ( $y = 0; $y < $img_h; $y += $step_y ) {
+				for ( $x = 0; $x < $img_w; $x += $step_x ) {
+					imagestring( $overlay, $gd_font, $x, $y, $text, $tc );
+				}
+			}
+		}
+
+		$this->merge_overlay( $image, $overlay, $img_w, $img_h, $opacity );
+		imagedestroy( $overlay );
+		return true;
+	}
+
+	/** Tile logo watermark across the full image. */
+	private function apply_tiled_image_watermark( $image, array $preset ) {
+		$logo_id = (int) ( $preset['logo_id'] ?? 0 );
+		if ( ! $logo_id ) {
+			return new WP_Error( 'no_logo', 'No logo selected for this preset.' );
+		}
+
+		$logo_path = get_attached_file( $logo_id );
+		if ( ! $logo_path || ! file_exists( $logo_path ) ) {
+			return new WP_Error( 'logo_missing', 'Logo file not found.' );
+		}
+
+		$logo_mime = get_post_mime_type( $logo_id );
+		$logo_res  = $this->load_image( $logo_path, $logo_mime );
+		if ( is_wp_error( $logo_res ) ) {
+			return $logo_res;
+		}
+		[ $logo, ] = $logo_res;
+
+		$img_w       = imagesx( $image );
+		$img_h       = imagesy( $image );
+		$logo_orig_w = imagesx( $logo );
+		$logo_orig_h = imagesy( $logo );
+
+		$logo_pct   = $this->clamp( (int) ( $preset['logo_width'] ?? 20 ), 1, 100 );
+		$new_logo_w = (int) round( $img_w * $logo_pct / 100 );
+		$new_logo_h = (int) round( $logo_orig_h * $new_logo_w / $logo_orig_w );
+
+		$resized = imagecreatetruecolor( $new_logo_w, $new_logo_h );
+		imagealphablending( $resized, false );
+		imagesavealpha( $resized, true );
+		$trans = imagecolorallocatealpha( $resized, 0, 0, 0, 127 );
+		imagefill( $resized, 0, 0, $trans );
+		imagecopyresampled( $resized, $logo, 0, 0, 0, 0, $new_logo_w, $new_logo_h, $logo_orig_w, $logo_orig_h );
+		imagedestroy( $logo );
+
+		$rotation = (float) ( $preset['rotation'] ?? 0 );
+		if ( $rotation != 0.0 ) {
+			$bg      = imagecolorallocatealpha( $resized, 0, 0, 0, 127 );
+			$rotated = imagerotate( $resized, -$rotation, $bg );
+			imagedestroy( $resized );
+			imagealphablending( $rotated, false );
+			imagesavealpha( $rotated, true );
+			$resized    = $rotated;
+			$new_logo_w = imagesx( $resized );
+			$new_logo_h = imagesy( $resized );
+		}
+
+		$opacity = $this->clamp( (int) ( $preset['opacity'] ?? 85 ), 0, 100 );
+		$gap_x   = max( 0, (int) ( $preset['tile_gap_x'] ?? 40 ) );
+		$gap_y   = max( 0, (int) ( $preset['tile_gap_y'] ?? 40 ) );
+		$step_x  = max( 1, $new_logo_w + $gap_x );
+		$step_y  = max( 1, $new_logo_h + $gap_y );
+
+		$overlay = $this->create_transparent_overlay( $img_w, $img_h );
+		for ( $y = 0; $y < $img_h; $y += $step_y ) {
+			for ( $x = 0; $x < $img_w; $x += $step_x ) {
+				imagecopy( $overlay, $resized, $x, $y, 0, 0, $new_logo_w, $new_logo_h );
+			}
+		}
+		imagedestroy( $resized );
+
+		$this->merge_overlay( $image, $overlay, $img_w, $img_h, $opacity );
+		imagedestroy( $overlay );
 		return true;
 	}
 

@@ -65,6 +65,16 @@
         });
     }
 
+    // ── Tile checkbox toggle ──────────────────────────────────────────────────
+
+    function bindTileToggle() {
+        $(document).on('change', '#wpwm-f-tile', function () {
+            var tiled = $(this).is(':checked');
+            $('#wpwm-tile-gap-rows').toggle(tiled);
+            $('#wpwm-position-rows').toggle(!tiled);
+        });
+    }
+
     // ── Date range toggle (batch apply tab) ──────────────────────────────────
 
     function bindDateRange() {
@@ -112,6 +122,9 @@
             preset_id:    $('#wpwm-preset-id').val(),
             name:         $('#wpwm-f-name').val(),
             type:         type,
+            tile:         $('#wpwm-f-tile').is(':checked') ? '1' : '',
+            tile_gap_x:   $('#wpwm-f-tile-gap-x').val(),
+            tile_gap_y:   $('#wpwm-f-tile-gap-y').val(),
             position:     $('#wpwm-f-position').val(),
             padding:      $('#wpwm-f-padding').val(),
             opacity:      $('#wpwm-f-opacity').val(),
@@ -127,6 +140,7 @@
         } else {
             data.logo_id    = $('#wpwm-f-logo-id').val();
             data.logo_width = $('#wpwm-f-logo-width').val();
+            data.rotation   = $('#wpwm-f-img-rotation').val();
         }
         return data;
     }
@@ -147,6 +161,10 @@
         $('#wpwm-logo-preview').html('');
         $('.wpwm-remove-logo').hide();
         $('#wpwm-f-logo-width').val(20); $('#wpwm-logo-width-val').text(20);
+        $('#wpwm-f-img-rotation').val(0);
+        $('#wpwm-f-tile').prop('checked', false).trigger('change');
+        $('#wpwm-f-tile-gap-x').val(40);
+        $('#wpwm-f-tile-gap-y').val(40);
         $('#wpwm-f-position').val('bottom-right');
         $('.wpwm-pos-btn').removeClass('active');
         $('.wpwm-pos-btn[data-pos="bottom-right"]').addClass('active');
@@ -181,7 +199,7 @@
             $('#wpwm-f-shadow').prop('checked', !!preset.shadow).trigger('change');
             $('#wpwm-f-shadow-color').val(preset.shadow_color || '#000000').trigger('change');
             $('#wpwm-f-shadow-offset').val(preset.shadow_offset || 2);
-            $('#wpwm-f-rotation').val(preset.rotation || 0);
+            $('#wpwm-f-rotation').val(preset.rotation != null ? preset.rotation : 0);
         } else {
             $('#wpwm-f-logo-id').val(preset.logo_id || 0);
             if (preset.logo_preview_url) {
@@ -190,16 +208,22 @@
             }
             $('#wpwm-f-logo-width').val(preset.logo_width || 20);
             $('#wpwm-logo-width-val').text(preset.logo_width || 20);
+            $('#wpwm-f-img-rotation').val(preset.rotation != null ? preset.rotation : 0);
         }
+
+        $('#wpwm-f-tile').prop('checked', !!preset.tile).trigger('change');
+        $('#wpwm-f-tile-gap-x').val(preset.tile_gap_x != null ? preset.tile_gap_x : 40);
+        $('#wpwm-f-tile-gap-y').val(preset.tile_gap_y != null ? preset.tile_gap_y : 40);
 
         var pos = preset.position || 'bottom-right';
         $('#wpwm-f-position').val(pos);
         $('.wpwm-pos-btn').removeClass('active');
         $('.wpwm-pos-btn[data-pos="' + pos + '"]').addClass('active');
         $('.wpwm-pos-label').text(posLabels[pos] || pos);
-        $('#wpwm-f-padding').val(preset.padding || 20);
-        $('#wpwm-f-opacity').val(preset.opacity || 70);
-        $('#wpwm-opacity-val').text(preset.opacity || 70);
+        $('#wpwm-f-padding').val(preset.padding != null ? preset.padding : 20);
+        var opacityVal = preset.opacity != null ? preset.opacity : 70;
+        $('#wpwm-f-opacity').val(opacityVal);
+        $('#wpwm-opacity-val').text(opacityVal);
         $('.wpwm-status').text('').removeClass('success error');
         updatePreviewLogo();
     }
@@ -252,6 +276,8 @@
                 // Update or add card in list
                 var $existing = $('.wpwm-preset-card[data-id="' + res.preset.id + '"]');
                 if ($existing.length) {
+                    // Remove orphaned reapply panel before replacing the card
+                    $('#wpwm-reapply-' + res.preset.id).remove();
                     $existing.replaceWith(res.card_html);
                 } else {
                     $('#wpwm-presets-list').append(res.card_html);
@@ -525,19 +551,22 @@
         return { x: x, y: y };
     }
 
-    function drawTextPreview(ctx, W, H, padX, padY, scaleX, pos) {
+    function drawTextPreview(ctx, W, H, padX, padY, scaleX, pos, tiled) {
         var raw = $('#wpwm-f-text').val() || '© {year} {site_name}';
         var text = raw
             .replace(/\{year\}/g,      new Date().getFullYear())
             .replace(/\{site_name\}/g, 'My Site')
             .replace(/\{site_url\}/g,  'mysite.com');
 
-        var fontSizePx  = Math.max(8, Math.round((parseInt($('#wpwm-f-font-size').val(), 10) || 24) * scaleX));
+        var fontSizeRaw = parseInt($('#wpwm-f-font-size').val(), 10);
+        var fontSizePx  = Math.max(8, Math.round((isNaN(fontSizeRaw) ? 24 : fontSizeRaw) * scaleX));
         var fontColor   = $('#wpwm-f-font-color').val()  || '#ffffff';
-        var rotation    = (parseFloat($('#wpwm-f-rotation').val())        || 0) * Math.PI / 180;
+        var rotRaw      = parseFloat($('#wpwm-f-rotation').val());
+        var rotation    = (isNaN(rotRaw) ? 0 : rotRaw) * Math.PI / 180;
         var hasShadow   = $('#wpwm-f-shadow').is(':checked');
         var shadowColor = $('#wpwm-f-shadow-color').val() || '#000000';
-        var shadowOff   = Math.max(1, Math.round((parseInt($('#wpwm-f-shadow-offset').val(), 10) || 2) * scaleX));
+        var shadowOffRaw = parseInt($('#wpwm-f-shadow-offset').val(), 10);
+        var shadowOff   = Math.max(1, Math.round((isNaN(shadowOffRaw) ? 2 : shadowOffRaw) * scaleX));
 
         ctx.font         = 'bold ' + fontSizePx + 'px Arial, sans-serif';
         ctx.textAlign    = 'center';
@@ -545,49 +574,89 @@
 
         var tw = ctx.measureText(text).width;
         var th = fontSizePx;
-        var cp = calcPreviewPos(pos, W, H, padX, padY, tw, th);
 
-        ctx.save();
-        ctx.translate(cp.x, cp.y);
-        ctx.rotate(rotation);
-
-        if (hasShadow) {
-            ctx.fillStyle = shadowColor;
-            ctx.fillText(text, shadowOff, shadowOff);
+        function drawOneTile(cx, cy) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(rotation);
+            if (hasShadow) {
+                ctx.fillStyle = shadowColor;
+                ctx.fillText(text, shadowOff, shadowOff);
+            }
+            ctx.fillStyle = fontColor;
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
         }
-        ctx.fillStyle = fontColor;
-        ctx.fillText(text, 0, 0);
-        ctx.restore();
+
+        if (tiled) {
+            var gapXRaw = parseInt($('#wpwm-f-tile-gap-x').val(), 10);
+            var gapYRaw = parseInt($('#wpwm-f-tile-gap-y').val(), 10);
+            var gapX = Math.round((isNaN(gapXRaw) ? 40 : gapXRaw) * scaleX);
+            var gapY = Math.round((isNaN(gapYRaw) ? 40 : gapYRaw) * scaleX);
+            var stepX = Math.max(1, tw + gapX);
+            var stepY = Math.max(1, th + gapY);
+            for (var ty = th / 2; ty < H + th; ty += stepY) {
+                for (var tx = tw / 2; tx < W + tw; tx += stepX) {
+                    drawOneTile(tx, ty);
+                }
+            }
+        } else {
+            var cp = calcPreviewPos(pos, W, H, padX, padY, tw, th);
+            drawOneTile(cp.x, cp.y);
+        }
     }
 
-    function drawLogoPreview(ctx, W, H, padX, padY, scaleX, pos) {
+    function drawLogoPreview(ctx, W, H, padX, padY, scaleX, pos, tiled) {
         var logoWidthPct = parseInt($('#wpwm-f-logo-width').val(), 10) || 20;
         var logoW        = Math.max(10, Math.round(logoWidthPct / 100 * W));
+        var rotRaw       = parseFloat($('#wpwm-f-img-rotation').val());
+        var rotation     = (isNaN(rotRaw) ? 0 : rotRaw) * Math.PI / 180;
 
+        var logoH;
         if (_previewLogoImg) {
             var naturalW = _previewLogoImg.naturalWidth;
             var aspect   = naturalW > 0 ? (_previewLogoImg.naturalHeight / naturalW) : 1;
-            var logoH    = Math.round(logoW * aspect);
-            var cp     = calcPreviewPos(pos, W, H, padX, padY, logoW, logoH);
-            ctx.drawImage(_previewLogoImg, cp.x - logoW / 2, cp.y - logoH / 2, logoW, logoH);
+            logoH = Math.round(logoW * aspect);
         } else {
-            // Placeholder dashed rectangle
-            var logoH2 = Math.round(logoW * 0.5);
-            var cp2    = calcPreviewPos(pos, W, H, padX, padY, logoW, logoH2);
-            var x0     = Math.round(cp2.x - logoW / 2);
-            var y0     = Math.round(cp2.y - logoH2 / 2);
+            logoH = Math.round(logoW * 0.5);
+        }
 
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth   = 1.5;
-            ctx.setLineDash([4, 3]);
-            ctx.strokeRect(x0, y0, logoW, logoH2);
-            ctx.setLineDash([]);
+        function drawOneTile(cx, cy) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(rotation);
+            if (_previewLogoImg) {
+                ctx.drawImage(_previewLogoImg, -logoW / 2, -logoH / 2, logoW, logoH);
+            } else {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth   = 1.5;
+                ctx.setLineDash([4, 3]);
+                ctx.strokeRect(-logoW / 2, -logoH / 2, logoW, logoH);
+                ctx.setLineDash([]);
+                ctx.fillStyle    = '#ffffff';
+                ctx.font         = Math.max(9, Math.round(logoH * 0.4)) + 'px Arial, sans-serif';
+                ctx.textAlign    = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('LOGO', 0, 0);
+            }
+            ctx.restore();
+        }
 
-            ctx.fillStyle    = '#ffffff';
-            ctx.font         = Math.max(9, Math.round(logoH2 * 0.4)) + 'px Arial, sans-serif';
-            ctx.textAlign    = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('LOGO', cp2.x, cp2.y);
+        if (tiled) {
+            var gapXRaw = parseInt($('#wpwm-f-tile-gap-x').val(), 10);
+            var gapYRaw = parseInt($('#wpwm-f-tile-gap-y').val(), 10);
+            var gapX = Math.round((isNaN(gapXRaw) ? 40 : gapXRaw) * scaleX);
+            var gapY = Math.round((isNaN(gapYRaw) ? 40 : gapYRaw) * scaleX);
+            var stepX = Math.max(1, logoW + gapX);
+            var stepY = Math.max(1, logoH + gapY);
+            for (var ty = logoH / 2; ty < H + logoH; ty += stepY) {
+                for (var tx = logoW / 2; tx < W + logoW; tx += stepX) {
+                    drawOneTile(tx, ty);
+                }
+            }
+        } else {
+            var cp = calcPreviewPos(pos, W, H, padX, padY, logoW, logoH);
+            drawOneTile(cp.x, cp.y);
         }
     }
 
@@ -603,6 +672,7 @@
         drawPreviewBackground(ctx, W, H);
 
         var type    = $('input[name="wpwm_type"]:checked').val() || 'text';
+        var tiled   = $('#wpwm-f-tile').is(':checked');
         var pos     = $('#wpwm-f-position').val()              || 'bottom-right';
         var paddingRaw = parseInt($('#wpwm-f-padding').val(), 10);
         var padding    = isNaN(paddingRaw) ? 0 : paddingRaw;
@@ -618,9 +688,9 @@
         ctx.globalAlpha = opacity;
 
         if (type === 'text') {
-            drawTextPreview(ctx, W, H, padX, padY, scaleX, pos);
+            drawTextPreview(ctx, W, H, padX, padY, scaleX, pos, tiled);
         } else {
-            drawLogoPreview(ctx, W, H, padX, padY, scaleX, pos);
+            drawLogoPreview(ctx, W, H, padX, padY, scaleX, pos, tiled);
         }
 
         ctx.globalAlpha = 1.0;
@@ -733,6 +803,7 @@
         bindPositionPicker();
         bindSliders();
         bindShadowToggle();
+        bindTileToggle();
         bindDateRange();
         bindLogoUploader();
         bindPresetEditor();
