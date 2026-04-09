@@ -1,0 +1,165 @@
+/* ── WP Watermark Pro – Admin Styles ──────────────────────────────────── */
+
+.wpwm-wrap { max-width: 900px; }
+.wpwm-wrap h1 { margin-bottom: 0; }
+
+/* Tabs */
+.wpwm-tab-content { margin-top: 20px; }
+
+/* Card */
+.wpwm-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+}
+.wpwm-card h3 { margin-top: 0; }
+
+/* Preset list header */
+.wpwm-presets-header {
+    margin-bottom: 16px;
+}
+
+/* Preset card */
+.wpwm-preset-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 20px;
+}
+.wpwm-preset-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.wpwm-preset-card-header strong {
+    font-size: 14px;
+    min-width: 120px;
+}
+.wpwm-preset-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Badges */
+.wpwm-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #f0f0f1;
+    color: #50575e;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.wpwm-badge-text  { background: #e6f0fb; color: #0073aa; }
+.wpwm-badge-image { background: #e9f5e9; color: #2e7d32; }
+
+/* Position picker */
+.wpwm-position-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 32px);
+    gap: 4px;
+    margin-bottom: 6px;
+}
+.wpwm-pos-btn {
+    width: 32px;
+    height: 32px;
+    border: 2px solid #c3c4c7 !important;
+    background: #f6f7f7 !important;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    padding: 0 !important;
+}
+.wpwm-pos-btn:hover {
+    border-color: #0073aa !important;
+    background: #e6f0fb !important;
+}
+.wpwm-pos-btn.active {
+    border-color: #0073aa !important;
+    background: #0073aa !important;
+}
+.wpwm-pos-label {
+    font-style: italic;
+    color: #646970;
+}
+
+/* Sliders */
+input[type="range"] {
+    vertical-align: middle;
+    width: 180px;
+    margin-right: 6px;
+}
+
+/* Logo preview */
+#wpwm-logo-preview {
+    margin-bottom: 8px;
+    min-height: 10px;
+}
+#wpwm-logo-preview img {
+    display: block;
+    max-height: 80px;
+    max-width: 200px;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    padding: 4px;
+    margin-bottom: 6px;
+}
+
+/* Editor action bar */
+.wpwm-editor-actions {
+    padding-top: 8px;
+    border-top: 1px solid #f0f0f1;
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.wpwm-spinner { flex-shrink: 0; }
+.wpwm-status { font-weight: 600; }
+.wpwm-status.success { color: #2e7d32; }
+.wpwm-status.error   { color: #c62828; }
+
+/* Progress bar */
+.wpwm-progress-bar {
+    height: 20px;
+    background: #f0f0f1;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+.wpwm-progress-fill {
+    height: 100%;
+    background: #0073aa;
+    transition: width .3s ease;
+}
+.wpwm-progress-text { color: #50575e; font-size: 13px; }
+
+/* Batch results */
+#wpwm-batch-result-list {
+    max-height: 240px;
+    overflow-y: auto;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    padding: 8px 12px;
+    list-style: none;
+    margin: 0;
+}
+#wpwm-batch-result-list li {
+    padding: 4px 0;
+    border-bottom: 1px solid #f0f0f1;
+    font-size: 13px;
+}
+#wpwm-batch-result-list li:last-child { border-bottom: none; }
+#wpwm-batch-result-list .ok   { color: #2e7d32; }
+#wpwm-batch-result-list .fail { color: #c62828; }
+
+/* Utility */
+.button-link-delete { color: #b32d2e !important; }
+.button-link-delete:hover { color: #a00 !important; }
