@@ -650,11 +650,27 @@
         // Re-render on any field change inside the editor
         $(document).on('input change', '#wpwm-preset-editor input, #wpwm-preset-editor select', renderPreview);
 
-        // Re-render after logo is selected or removed (allow DOM to update first)
-        // Allow the media-uploader DOM to finish updating before reading the logo src
-        $(document).on('click', '#wpwm-upload-logo, .wpwm-remove-logo', function () {
-            setTimeout(updatePreviewLogo, 400);
+        // Re-render when the selected logo actually changes.
+        $(document).on('change', '#wpwm-f-logo-id', updatePreviewLogo);
+
+        // Re-render after logo removal once the DOM has been updated.
+        $(document).on('click', '.wpwm-remove-logo', function () {
+            setTimeout(updatePreviewLogo, 0);
         });
+
+        // Observe preview DOM updates from the media uploader so the canvas refreshes
+        // after the user selects a logo in the modal.
+        var previewNode = document.getElementById('wpwm-logo-preview');
+        if (previewNode && window.MutationObserver) {
+            new MutationObserver(function () {
+                updatePreviewLogo();
+            }).observe(previewNode, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['src']
+            });
+        }
     }
 
     // ── Backup management (Backups tab) ───────────────────────────────────────
